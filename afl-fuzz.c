@@ -160,6 +160,9 @@ static u8  var_bytes[MAP_SIZE];       /* Bytes that appear to be variable */
 
 static s32 shm_id;                    /* ID of the SHM region             */
 
+//unsigned int* extract_response_codes_generic(unsigned char* buf, unsigned int buf_size, unsigned int* state_count_ref);
+
+region_t* extract_requests_generic(unsigned char* buf, unsigned int buf_size, unsigned int* region_count_ref);
 static volatile u8 stop_soon,         /* Ctrl-C pressed?                  */
                    clear_screen = 1,  /* Window resized?                  */
                    child_timed_out;   /* Traced process timed out?        */
@@ -394,12 +397,12 @@ u8 state_selection_algo = ROUND_ROBIN, seed_selection_algo = RANDOM_SELECTION;
 u8 false_negative_reduction = 0;
 
 /* Implemented state machine */
-Agraph_t  *ipsm;
-static FILE* ipsm_dot_file;
+//Agraph_t  *ipsm;
+//static FILE* ipsm_dot_file;
 
 /* Hash table/map and list */
 klist_t(lms) *kl_messages;
-khash_t(hs32) *khs_ipsm_paths;
+//khash_t(hs32) *khs_ipsm_paths;
 khash_t(hms) *khms_states;
 
 //M2_prev points to the last message of M1 (i.e., prefix)
@@ -409,18 +412,18 @@ khash_t(hms) *khms_states;
 kliter_t(lms) *M2_prev, *M2_next;
 
 //Function pointers pointing to Protocol-specific functions
-unsigned int* (*extract_response_codes)(unsigned char* buf, unsigned int buf_size, unsigned int* state_count_ref) = NULL;
-region_t* (*extract_requests)(unsigned char* buf, unsigned int buf_size, unsigned int* region_count_ref) = NULL;
+//unsigned int* (*extract_response_codes)(unsigned char* buf, unsigned int buf_size, unsigned int* state_count_ref) = extract_response_codes_generic;
+region_t* (*extract_requests)(unsigned char* buf, unsigned int buf_size, unsigned int* region_count_ref) = extract_requests_generic;
 
 /* Initialize the implemented state machine as a graphviz graph */
 void setup_ipsm()
 {
-  ipsm = agopen("g", Agdirected, 0);
+  //ipsm = agopen("g", Agdirected, 0);
 
-  agattr(ipsm, AGNODE, "color", "black"); //Default node colr is black
-  agattr(ipsm, AGEDGE, "color", "black"); //Default edge color is black
+  //agattr(ipsm, AGNODE, "color", "black"); //Default node colr is black
+  //agattr(ipsm, AGEDGE, "color", "black"); //Default edge color is black
 
-  khs_ipsm_paths = kh_init(hs32);
+  //khs_ipsm_paths = kh_init(hs32);
 
   khms_states = kh_init(hms);
 }
@@ -517,21 +520,21 @@ u8 is_state_sequence_interesting(unsigned int *state_sequence, unsigned int stat
 }
 
 /* Update the annotations of regions (i.e., state sequence received from the server) */
-void update_region_annotations(struct queue_entry* q)
-{
-  u32 i = 0;
-
-  for (i = 0; i < messages_sent; i++) {
-    if ((response_bytes[i] == 0) || ( i > 0 && (response_bytes[i] - response_bytes[i - 1] == 0))) {
-      q->regions[i].state_sequence = NULL;
-      q->regions[i].state_count = 0;
-    } else {
-      unsigned int state_count;
-      q->regions[i].state_sequence = (*extract_response_codes)(response_buf, response_bytes[i], &state_count);
-      q->regions[i].state_count = state_count;
-    }
-  }
-}
+//void update_region_annotations(struct queue_entry* q)
+//{
+//  u32 i = 0;
+//
+//  for (i = 0; i < messages_sent; i++) {
+//    if ((response_bytes[i] == 0) || ( i > 0 && (response_bytes[i] - response_bytes[i - 1] == 0))) {
+//      q->regions[i].state_sequence = NULL;
+//      q->regions[i].state_count = 0;
+//    } else {
+//      unsigned int state_count;
+//      q->regions[i].state_sequence = (*extract_response_codes)(response_buf, response_bytes[i], &state_count);
+//      q->regions[i].state_count = state_count;
+//    }
+//  }
+//}
 
 /* Choose a region data for region-level mutations */
 u8* choose_source_region(u32 *out_len) {
@@ -2229,6 +2232,83 @@ EXP_ST void setup_shm(void) {
   if (!trace_bits) PFATAL("shmat() failed");
 
 }
+
+
+
+
+/********************************************************/
+/* 		StateAFL bypasses response code extraction 		*/
+/* 		 and build a generic request extraction 		*/
+unsigned int* extract_response_codes_generic(unsigned char* buf, unsigned int buf_size, unsigned int* state_count_ref) {
+
+  unsigned int state_tracer_count_all = state_shared_ptr->seq_len;
+
+  *state_count_ref = state_tracer_count_all;
+
+  unsigned int * state_sequence = ck_alloc( (*state_count_ref)*sizeof(int) );
+  memcpy(state_sequence, state_shared_ptr->seq, *state_count_ref * sizeof(unsigned int));
+
+
+  return state_sequence;
+}
+
+//static unsigned int mutated_region_count = 0;
+//static region_t* mutated_regions = NULL;
+
+region_t* extract_requests_generic(unsigned char* buf, unsigned int buf_size, unsigned int* region_count_ref) {
+
+  unsigned int region_count = 0;
+  region_t *regions = NULL;
+
+  unsigned int cur_start = 0;
+
+  //if(mutated_regions != NULL && mutated_region_count > 0) {
+
+  //  *region_count_ref = mutated_region_count;
+
+  //  regions = ck_alloc(mutated_region_count * sizeof(region_t));
+  //  memcpy(regions, mutated_regions, mutated_region_count * sizeof(region_t));
+
+  //  return regions;
+  //}
+
+
+  unsigned int byte_count = 0;
+
+  while(byte_count < buf_size) {
+
+    if(byte_count + 4 >= buf_size) {
+      PFATAL("AFLNet - Erroreous message length in input file");
+    }
+
+    unsigned int next_message_len = *((unsigned int *)(void *)&buf[byte_count]);
+
+    byte_count += sizeof(unsigned int);
+
+    if(byte_count + next_message_len > buf_size) {
+      PFATAL("AFLNet - Erroneous message length in input file (2)");
+    }
+
+    region_count++;
+
+    regions = (region_t *)ck_realloc(regions, region_count * sizeof(region_t));
+
+    regions[region_count - 1].start_byte = cur_start;
+    regions[region_count - 1].end_byte = cur_start + next_message_len - 1;
+    regions[region_count - 1].state_sequence = NULL;
+    regions[region_count - 1].state_count = 0;
+
+    cur_start += next_message_len;
+    byte_count += next_message_len;
+
+  }
+
+  *region_count_ref = region_count;
+  return regions;
+
+}
+/* 					End of StateAFL						*/
+/********************************************************/
 
 
 /* Load postprocessor, if available. */
@@ -9074,6 +9154,11 @@ int main(int argc, char** argv) {
           FATAL("%s protocol is not supported yet!", optarg);
         }
 
+
+		// bypass the protocol selection
+        extract_requests = &extract_requests_generic;
+        extract_response_codes = &extract_response_codes_generic;
+
         protocol_selected = 1;
 
         break;
@@ -9132,7 +9217,7 @@ int main(int argc, char** argv) {
   //AFLNet - Check for required arguments
   if (!use_net) FATAL("Please specify network information of the server under test (e.g., tcp://127.0.0.1/8554)");
 
-  if (!protocol_selected) FATAL("Please specify the protocol to be tested using the -P option");
+  //if (!protocol_selected) FATAL("Please specify the protocol to be tested using the -P option");
 
   if (netns_name) {
     if (check_ep_capability(CAP_SYS_ADMIN, argv[0]) != 0)
