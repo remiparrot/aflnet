@@ -275,7 +275,7 @@ struct queue_entry {
   u32 index;                          /* Index of this queue entry in the whole queue */
   u32 generating_state_id;            /* ID of the start at which the new seed was generated */
   u8 is_initial_seed;                 /* Is this an initial seed */
-  u32 unique_state_count;             /* Unique number of states traversed by this queue entry */
+  //u32 unique_state_count;             /* Unique number of states traversed by this queue entry */
 
 };
 
@@ -772,7 +772,7 @@ void update_state_aware_variables(struct queue_entry *q, u8 dry_run)
 
   unsigned int *state_sequence = (*extract_response_codes)(response_buf, response_buf_size, &state_count);
 
-  q->unique_state_count = get_unique_state_count(state_sequence, state_count);
+  //q->unique_state_count = get_unique_state_count(state_sequence, state_count);
 
   if (is_state_sequence_interesting(state_sequence, state_count)) {
     //Save the current kl_messages to a file which can be used to replay the newly discovered paths on the ipsm
@@ -1591,7 +1591,7 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
   q->index        = queued_paths;
   q->generating_state_id = target_state_id;
   q->is_initial_seed = 0;
-  q->unique_state_count = 0;
+  //q->unique_state_count = 0;
 
   if (q->depth > max_depth) max_depth = q->depth;
 
@@ -2104,11 +2104,12 @@ static void update_bitmap_score(struct queue_entry* q) {
 
          /* AFLNet check unique state count first */
 
-         if (q->unique_state_count < top_rated[i]->unique_state_count) continue;
+         //if (q->unique_state_count < top_rated[i]->unique_state_count) continue;
 
          /* Faster-executing or smaller test cases are favored. */
 
-         if ((q->unique_state_count < top_rated[i]->unique_state_count) && (fav_factor > top_rated[i]->exec_us * top_rated[i]->len)) continue;
+         //if ((q->unique_state_count < top_rated[i]->unique_state_count) && (fav_factor > top_rated[i]->exec_us * top_rated[i]->len)) continue;
+         if (fav_factor > top_rated[i]->exec_us * top_rated[i]->len) continue;
 
          /* Looks like we're going to win. Decrease ref count for the
             previous winner, discard its trace_bits[] if necessary. */
@@ -9117,42 +9118,42 @@ int main(int argc, char** argv) {
       case 'P': /* protocol to be tested */
         if (protocol_selected) FATAL("Multiple -P options not supported");
 
-        if (!strcmp(optarg, "RTSP")) {
-          extract_requests = &extract_requests_rtsp;
-          extract_response_codes = &extract_response_codes_rtsp;
-        } else if (!strcmp(optarg, "FTP")) {
-          extract_requests = &extract_requests_ftp;
-          extract_response_codes = &extract_response_codes_ftp;
-        } else if (!strcmp(optarg, "DTLS12")) {
-          extract_requests = &extract_requests_dtls12;
-          extract_response_codes = &extract_response_codes_dtls12;
-        } else if (!strcmp(optarg, "DNS")) {
-          extract_requests = &extract_requests_dns;
-          extract_response_codes = &extract_response_codes_dns;
-        } else if (!strcmp(optarg, "DICOM")) {
-          extract_requests = &extract_requests_dicom;
-          extract_response_codes = &extract_response_codes_dicom;
-        } else if (!strcmp(optarg, "SMTP")) {
-          extract_requests = &extract_requests_smtp;
-          extract_response_codes = &extract_response_codes_smtp;
-        } else if (!strcmp(optarg, "SSH")) {
-          extract_requests = &extract_requests_ssh;
-          extract_response_codes = &extract_response_codes_ssh;
-        } else if (!strcmp(optarg, "TLS")) {
-          extract_requests = &extract_requests_tls;
-          extract_response_codes = &extract_response_codes_tls;
-        } else if (!strcmp(optarg, "SIP")) {
-          extract_requests = &extract_requests_sip;
-          extract_response_codes = &extract_response_codes_sip;
-        } else if (!strcmp(optarg, "HTTP")) {
-          extract_requests = &extract_requests_http;
-          extract_response_codes = &extract_response_codes_http;
-        } else if (!strcmp(optarg, "IPP")) {
-          extract_requests = &extract_requests_ipp;
-          extract_response_codes = &extract_response_codes_ipp;
-        } else {
-          FATAL("%s protocol is not supported yet!", optarg);
-        }
+        //if (!strcmp(optarg, "RTSP")) {
+        //  extract_requests = &extract_requests_rtsp;
+        //  extract_response_codes = &extract_response_codes_rtsp;
+        //} else if (!strcmp(optarg, "FTP")) {
+        //  extract_requests = &extract_requests_ftp;
+        //  extract_response_codes = &extract_response_codes_ftp;
+        //} else if (!strcmp(optarg, "DTLS12")) {
+        //  extract_requests = &extract_requests_dtls12;
+        //  extract_response_codes = &extract_response_codes_dtls12;
+        //} else if (!strcmp(optarg, "DNS")) {
+        //  extract_requests = &extract_requests_dns;
+        //  extract_response_codes = &extract_response_codes_dns;
+        //} else if (!strcmp(optarg, "DICOM")) {
+        //  extract_requests = &extract_requests_dicom;
+        //  extract_response_codes = &extract_response_codes_dicom;
+        //} else if (!strcmp(optarg, "SMTP")) {
+        //  extract_requests = &extract_requests_smtp;
+        //  extract_response_codes = &extract_response_codes_smtp;
+        //} else if (!strcmp(optarg, "SSH")) {
+        //  extract_requests = &extract_requests_ssh;
+        //  extract_response_codes = &extract_response_codes_ssh;
+        //} else if (!strcmp(optarg, "TLS")) {
+        //  extract_requests = &extract_requests_tls;
+        //  extract_response_codes = &extract_response_codes_tls;
+        //} else if (!strcmp(optarg, "SIP")) {
+        //  extract_requests = &extract_requests_sip;
+        //  extract_response_codes = &extract_response_codes_sip;
+        //} else if (!strcmp(optarg, "HTTP")) {
+        //  extract_requests = &extract_requests_http;
+        //  extract_response_codes = &extract_response_codes_http;
+        //} else if (!strcmp(optarg, "IPP")) {
+        //  extract_requests = &extract_requests_ipp;
+        //  extract_response_codes = &extract_response_codes_ipp;
+        //} else {
+        //  FATAL("%s protocol is not supported yet!", optarg);
+        //}
 
 
 		// bypass the protocol selection
