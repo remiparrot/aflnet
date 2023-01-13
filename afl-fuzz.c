@@ -69,7 +69,7 @@
 #include <sys/capability.h>
 
 #include "aflnet.h"
-#include <graphviz/gvc.h>
+//#include <graphviz/gvc.h>
 #include <math.h>
 
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined (__OpenBSD__)
@@ -275,6 +275,7 @@ struct queue_entry {
   u32 index;                          /* Index of this queue entry in the whole queue */
   u32 generating_state_id;            /* ID of the start at which the new seed was generated */
   u8 is_initial_seed;                 /* Is this an initial seed */
+  u32 M2_start_region_ID;			  /* ID of the region (in the array regions) where we will start mutation */
   //u32 unique_state_count;             /* Unique number of states traversed by this queue entry */
 
 };
@@ -410,6 +411,7 @@ khash_t(hms) *khms_states;
 //M2_next points to the first message of M3 (i.e., suffix)
 //If M3 is empty, M2_next point to the end of the kl_messages linked list
 kliter_t(lms) *M2_prev, *M2_next;
+u32 M2_start_region_ID;
 
 //Function pointers pointing to Protocol-specific functions
 //unsigned int* (*extract_response_codes)(unsigned char* buf, unsigned int buf_size, unsigned int* state_count_ref) = extract_response_codes_generic;
@@ -431,9 +433,9 @@ void setup_ipsm()
 /* Free memory allocated to state-machine variables */
 void destroy_ipsm()
 {
-  agclose(ipsm);
+  //agclose(ipsm);
 
-  kh_destroy(hs32, khs_ipsm_paths);
+  //kh_destroy(hs32, khs_ipsm_paths);
 
   state_info_t *state;
   kh_foreach_value(khms_states, state, {ck_free(state->seeds); ck_free(state);});
@@ -495,29 +497,29 @@ u32 get_unique_state_count(unsigned int *state_sequence, unsigned int state_coun
 }
 
 /* Check if a state sequence is interesting (e.g., new state is discovered). Loop is taken into account */
-u8 is_state_sequence_interesting(unsigned int *state_sequence, unsigned int state_count) {
-  //limit the loop count to only 1
-  u32 *trimmed_state_sequence = NULL;
-  u32 i, count = 0;
-  for (i=0; i < state_count; i++) {
-    if ((i >= 2) && (state_sequence[i] == state_sequence[i - 1]) && (state_sequence[i] == state_sequence[i - 2])) continue;
-    count++;
-    trimmed_state_sequence = (u32 *)realloc(trimmed_state_sequence, count * sizeof(unsigned int));
-    trimmed_state_sequence[count - 1] = state_sequence[i];
-  }
-
-  //Calculate the hash based on the shortened state sequence
-  u32 hashKey = hash32(trimmed_state_sequence, count * sizeof(unsigned int), 0);
-  if (trimmed_state_sequence) free(trimmed_state_sequence);
-
-  if (kh_get(hs32, khs_ipsm_paths, hashKey) != kh_end(khs_ipsm_paths)) {
-    return 0;
-  } else {
-    int dummy;
-    kh_put(hs32, khs_ipsm_paths, hashKey, &dummy);
-    return 1;
-  }
-}
+//u8 is_state_sequence_interesting(unsigned int *state_sequence, unsigned int state_count) {
+//  //limit the loop count to only 1
+//  u32 *trimmed_state_sequence = NULL;
+//  u32 i, count = 0;
+//  for (i=0; i < state_count; i++) {
+//    if ((i >= 2) && (state_sequence[i] == state_sequence[i - 1]) && (state_sequence[i] == state_sequence[i - 2])) continue;
+//    count++;
+//    trimmed_state_sequence = (u32 *)realloc(trimmed_state_sequence, count * sizeof(unsigned int));
+//    trimmed_state_sequence[count - 1] = state_sequence[i];
+//  }
+//
+//  //Calculate the hash based on the shortened state sequence
+//  u32 hashKey = hash32(trimmed_state_sequence, count * sizeof(unsigned int), 0);
+//  if (trimmed_state_sequence) free(trimmed_state_sequence);
+//
+//  if (kh_get(hs32, khs_ipsm_paths, hashKey) != kh_end(khs_ipsm_paths)) {
+//    return 0;
+//  } else {
+//    int dummy;
+//    kh_put(hs32, khs_ipsm_paths, hashKey, &dummy);
+//    return 1;
+//  }
+//}
 
 /* Update the annotations of regions (i.e., state sequence received from the server) */
 //void update_region_annotations(struct queue_entry* q)
@@ -1592,6 +1594,7 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
   q->generating_state_id = target_state_id;
   q->is_initial_seed = 0;
   //q->unique_state_count = 0;
+  q->M2_start_region_ID = M2_start_region_ID;
 
   if (q->depth > max_depth) max_depth = q->depth;
 
@@ -1633,6 +1636,7 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
     //Keep track the maximal number of seed regions
     //We use this for some optimization to reduce the overhead while following the server's sequence diagram
     if ((corpus_read_or_sync == 1) && (q->region_count > max_seed_region_count)) max_seed_region_count = q->region_count;
+	q->M2_start_region_ID = get_M2_start_region_ID(fname);
 
   } else {
     //Convert the linked list kl_messages to regions
@@ -2296,8 +2300,8 @@ region_t* extract_requests_generic(unsigned char* buf, unsigned int buf_size, un
 
     regions[region_count - 1].start_byte = cur_start;
     regions[region_count - 1].end_byte = cur_start + next_message_len - 1;
-    regions[region_count - 1].state_sequence = NULL;
-    regions[region_count - 1].state_count = 0;
+    //regions[region_count - 1].state_sequence = NULL;
+    //regions[region_count - 1].state_count = 0;
 
     cur_start += next_message_len;
     byte_count += next_message_len;
@@ -2386,43 +2390,58 @@ static void read_testcases(void) {
 
   }
 
+  u8* replay_fname = "replay";
+  u8* len_fname = "length";
+
   for (i = 0; i < nl_cnt; i++) {
 
-    struct stat st;
+		if(strstr(nl[i]->d_name,replay_fname)) {
 
-    u8* fn = alloc_printf("%s/%s", in_dir, nl[i]->d_name);
-    u8* dfn = alloc_printf("%s/.state/deterministic_done/%s", in_dir, nl[i]->d_name);
+			struct stat st;
 
-    u8  passed_det = 0;
+			u8* fn = alloc_printf("%s/%s", in_dir, nl[i]->d_name);
+			u8* dfn = alloc_printf("%s/.state/deterministic_done/%s", in_dir, nl[i]->d_name);
 
-    free(nl[i]); /* not tracked */
+			u8  passed_det = 0;
 
-    if (lstat(fn, &st) || access(fn, R_OK))
-      PFATAL("Unable to access '%s'", fn);
+			free(nl[i]); /* not tracked */
 
-    /* This also takes care of . and .. */
+			if (lstat(fn, &st) || access(fn, R_OK))
+				PFATAL("Unable to access '%s'", fn);
 
-    if (!S_ISREG(st.st_mode) || !st.st_size || strstr(fn, "/README.txt")) {
+			/* This also takes care of . and .. */
 
-      ck_free(fn);
-      ck_free(dfn);
-      continue;
+			if (!S_ISREG(st.st_mode) || !st.st_size || strstr(fn, "/README.txt")) {
 
-    }
+				ck_free(fn);
+				ck_free(dfn);
+				continue;
 
-    if (st.st_size > MAX_FILE)
-      FATAL("Test case '%s' is too big (%s, limit is %s)", fn,
-            DMS(st.st_size), DMS(MAX_FILE));
+			}
 
-    /* Check for metadata that indicates that deterministic fuzzing
-       is complete for this entry. We don't want to repeat deterministic
-       fuzzing when resuming aborted scans, because it would be pointless
-       and probably very time-consuming. */
+			if (st.st_size > MAX_FILE)
+				FATAL("Test case '%s' is too big (%s, limit is %s)", fn,
+							DMS(st.st_size), DMS(MAX_FILE));
 
-    if (!access(dfn, F_OK)) passed_det = 1;
-    ck_free(dfn);
+			/* Check for metadata that indicates that deterministic fuzzing
+				 is complete for this entry. We don't want to repeat deterministic
+				 fuzzing when resuming aborted scans, because it would be pointless
+				 and probably very time-consuming. */
 
-    add_to_queue(fn, st.st_size, passed_det);
+			if (!access(dfn, F_OK)) passed_det = 1;
+			ck_free(dfn);
+
+			// build its corresponding length filename
+			u8* cp_fname;
+			strncpy(cp_fname, nl[i]->d_name, len(nl[i]->d_name));
+			u8* replay_pos = strstr(cp_fname, replay_fname);
+			if (replay_pos != NULL) {
+					memcpy(replay_pos, len_fname, 6);
+			}
+			// TODO: get the length value by reading the file
+
+			add_to_queue(fn, st.st_size, passed_det);
+		}
 
   }
 
@@ -3661,6 +3680,8 @@ static void perform_dry_run(char** argv) {
 
     /* AFLNet construct the kl_messages linked list for this queue entry*/
     kl_messages = construct_kl_messages(q->fname, q->regions, q->region_count);
+
+	M2_start_region_ID = get_M2_start_region_ID(fname);
 
     res = calibrate_case(argv, q, use_mem, 0, 1);
     ck_free(use_mem);
@@ -5971,55 +5992,62 @@ AFLNET_REGIONS_SELECTION:;
 
   cur_depth = queue_cur->depth;
 
-  u32 M2_start_region_ID = 0, M2_region_count = 0;
+  //u32 M2_start_region_ID = 0, M2_region_count = 0;
+  u32 M2_region_count = 0;
   /* Identify the prefix M1, the candidate subsequence M2, and the suffix M3. See AFLNet paper */
   /* In this implementation, we only need to indentify M2_start_region_ID which is the first region of M2
   and M2_region_count which is the total number of regions in M2. How the information is identified is
   state aware dependent. However, once the information is clear, the code for fuzzing preparation is the same */
 
   if (state_aware_mode) {
-    /* In state aware mode, select M2 based on the targeted state ID */
-    u32 total_region = queue_cur->region_count;
-    if (total_region == 0) PFATAL("0 region found for %s", queue_cur->fname);
 
-    if (target_state_id == 0) {
-      //No prefix subsequence (M1 is empty)
-      M2_start_region_ID = 0;
-      M2_region_count = 0;
+	// M2 start point is defined in the queue struct
+	M2_start_region_ID = queue_cur->M2_start_region_ID;
+	// M2 size is selected randomly
+    M2_region_count = UR(total_region - M2_start_region_ID);
 
-      //To compute M2_region_count, we identify the first region which has a different annotation
-      //Now we quickly compare the state count, we could make it more fine grained by comparing the exact response codes
-      for(i = 0; i < queue_cur->region_count ; i++) {
-        if (queue_cur->regions[i].state_count != queue_cur->regions[0].state_count) break;
-        M2_region_count++;
-      }
-    } else {
-      //M1 is unlikely to be empty
-      M2_start_region_ID = 0;
+    ///* In state aware mode, select M2 based on the targeted state ID */
+    //u32 total_region = queue_cur->region_count;
+    //if (total_region == 0) PFATAL("0 region found for %s", queue_cur->fname);
 
-      //Identify M2_start_region_ID first based on the target_state_id
-      for(i = 0; i < queue_cur->region_count; i++) {
-        u32 regionalStateCount = queue_cur->regions[i].state_count;
-        if (regionalStateCount > 0) {
-          //reachableStateID is the last ID in the state_sequence
-          u32 reachableStateID = queue_cur->regions[i].state_sequence[regionalStateCount - 1];
-          M2_start_region_ID++;
-          if (reachableStateID == target_state_id) break;
-        } else {
-          //No annotation for this region
-          return 1;
-        }
-      }
+    //if (target_state_id == 0) {
+    //  //No prefix subsequence (M1 is empty)
+    //  M2_start_region_ID = 0;
+    //  M2_region_count = 0;
 
-      //Then identify M2_region_count
-      for(i = M2_start_region_ID; i < queue_cur->region_count ; i++) {
-        if (queue_cur->regions[i].state_count != queue_cur->regions[M2_start_region_ID].state_count) break;
-        M2_region_count++;
-      }
+    //  //To compute M2_region_count, we identify the first region which has a different annotation
+    //  //Now we quickly compare the state count, we could make it more fine grained by comparing the exact response codes
+    //  for(i = 0; i < queue_cur->region_count ; i++) {
+    //    if (queue_cur->regions[i].state_count != queue_cur->regions[0].state_count) break;
+    //    M2_region_count++;
+    //  }
+    //} else {
+    //  //M1 is unlikely to be empty
+    //  M2_start_region_ID = 0;
 
-      //Handle corner case(s) and skip the current queue entry
-      if (M2_start_region_ID >= queue_cur->region_count) return 1;
-    }
+    //  //Identify M2_start_region_ID first based on the target_state_id
+    //  for(i = 0; i < queue_cur->region_count; i++) {
+    //    u32 regionalStateCount = queue_cur->regions[i].state_count;
+    //    if (regionalStateCount > 0) {
+    //      //reachableStateID is the last ID in the state_sequence
+    //      u32 reachableStateID = queue_cur->regions[i].state_sequence[regionalStateCount - 1];
+    //      M2_start_region_ID++;
+    //      if (reachableStateID == target_state_id) break;
+    //    } else {
+    //      //No annotation for this region
+    //      return 1;
+    //    }
+    //  }
+
+    //  //Then identify M2_region_count
+    //  for(i = M2_start_region_ID; i < queue_cur->region_count ; i++) {
+    //    if (queue_cur->regions[i].state_count != queue_cur->regions[M2_start_region_ID].state_count) break;
+    //    M2_region_count++;
+    //  }
+
+    //  //Handle corner case(s) and skip the current queue entry
+    //  if (M2_start_region_ID >= queue_cur->region_count) return 1;
+    //}
   } else {
     /* Select M2 randomly */
     u32 total_region = queue_cur->region_count;
@@ -7832,7 +7860,7 @@ static void sync_fuzzers(char** argv) {
         if (stop_soon) return;
 
         /* AFLNet: set this flag to enable request extractions while adding new seed to the queue */
-        corpus_read_or_sync = 2;
+        corpus_read_or_sync = 1;
 
         syncing_party = sd_ent->d_name;
         queued_imported += save_if_interesting(argv, mem, st.st_size, fault);

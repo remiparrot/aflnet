@@ -95,6 +95,9 @@ int net_recv(int sockfd, struct timeval timeout, int poll_w, char **response_buf
 /* Construct a new linked list to store all messages from a list of regions */
 klist_t(lms) *construct_kl_messages(u8* fname, region_t *regions, u32 region_count);
 
+/* Read the value of M2_start_region_ID from file */
+u32 get_M2_start_region_ID(u8* fname)
+
 /* Free all items and delete kl_messages */
 void delete_kl_messages(klist_t(lms) *kl_messages);
 
