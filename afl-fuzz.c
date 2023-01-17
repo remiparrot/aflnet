@@ -571,31 +571,31 @@ u8* choose_source_region(u32 *out_len) {
 }
 
 /* Update #fuzzs visiting a specific state */
-void update_fuzzs() {
-  unsigned int state_count, i, discard;
-  unsigned int *state_sequence = (*extract_response_codes)(response_buf, response_buf_size, &state_count);
-
-  //A hash set is used so that the #paths is not updated more than once for one specific state
-  khash_t(hs32) *khs_state_ids;
-  khint_t k;
-  khs_state_ids = kh_init(hs32);
-
-  for(i = 0; i < state_count; i++) {
-    unsigned int state_id = state_sequence[i];
-
-    if (kh_get(hs32, khs_state_ids, state_id) != kh_end(khs_state_ids)) {
-      continue;
-    } else {
-      kh_put(hs32, khs_state_ids, state_id, &discard);
-      k = kh_get(hms, khms_states, state_id);
-      if (k != kh_end(khms_states)) {
-        kh_val(khms_states, k)->fuzzs++;
-      }
-    }
-  }
-  ck_free(state_sequence);
-  kh_destroy(hs32, khs_state_ids);
-}
+//void update_fuzzs() {
+//  unsigned int state_count, i, discard;
+//  unsigned int *state_sequence = (*extract_response_codes)(response_buf, response_buf_size, &state_count);
+//
+//  //A hash set is used so that the #paths is not updated more than once for one specific state
+//  khash_t(hs32) *khs_state_ids;
+//  khint_t k;
+//  khs_state_ids = kh_init(hs32);
+//
+//  for(i = 0; i < state_count; i++) {
+//    unsigned int state_id = state_sequence[i];
+//
+//    if (kh_get(hs32, khs_state_ids, state_id) != kh_end(khs_state_ids)) {
+//      continue;
+//    } else {
+//      kh_put(hs32, khs_state_ids, state_id, &discard);
+//      k = kh_get(hms, khms_states, state_id);
+//      if (k != kh_end(khms_states)) {
+//        kh_val(khms_states, k)->fuzzs++;
+//      }
+//    }
+//  }
+//  ck_free(state_sequence);
+//  kh_destroy(hs32, khs_state_ids);
+//}
 
 /* Return the index of the "region" containing a given value */
 u32 index_search(u32 *A, u32 n, u32 val) {
@@ -627,7 +627,8 @@ u32 update_scores_and_select_next_state(u8 mode) {
       state = kh_val(khms_states, k);
       switch(mode) {
         case FAVOR:
-          state->score = ceil(1000 * pow(2, -log10(log10(state->fuzzs + 1) * state->selected_times + 1)) * pow(2, log(state->paths_discovered + 1)));
+          //state->score = ceil(1000 * pow(2, -log10(log10(state->fuzzs + 1) * state->selected_times + 1)) * pow(2, log(state->paths_discovered + 1)));
+          state->score = ceil(1000 * pow(2, -log10(state->selected_times + 1)));
           break;
         //other cases are reserved
       }
@@ -763,229 +764,253 @@ struct queue_entry *choose_seed(u32 target_state_id, u8 mode)
 }
 
 /* Update state-aware variables */
-void update_state_aware_variables(struct queue_entry *q, u8 dry_run)
-{
-  khint_t k;
-  int discard, i;
-  state_info_t *state;
-  unsigned int state_count;
+//void update_state_aware_variables(struct queue_entry *q, u8 dry_run)
+//{
+//  khint_t k;
+//  int discard, i;
+//  state_info_t *state;
+//  unsigned int state_count;
+//
+//  if (!response_buf_size || !response_bytes) return;
+//
+//  unsigned int *state_sequence = (*extract_response_codes)(response_buf, response_buf_size, &state_count);
+//
+//  //q->unique_state_count = get_unique_state_count(state_sequence, state_count);
+//
+//  if (is_state_sequence_interesting(state_sequence, state_count)) {
+//    //Save the current kl_messages to a file which can be used to replay the newly discovered paths on the ipsm
+//    u8 *temp_str = state_sequence_to_string(state_sequence, state_count);
+//    u8 *fname = alloc_printf("%s/replayable-new-ipsm-paths/id:%s:%s", out_dir, temp_str, dry_run ? basename(q->fname) : "new");
+//    save_kl_messages_to_file(kl_messages, fname, 1, messages_sent);
+//    ck_free(temp_str);
+//    ck_free(fname);
+//
+//    //Update the IPSM graph
+//    if (state_count > 1) {
+//      unsigned int prevStateID = state_sequence[0];
+//
+//      for(i=1; i < state_count; i++) {
+//        unsigned int curStateID = state_sequence[i];
+//        char fromState[STATE_STR_LEN], toState[STATE_STR_LEN];
+//        snprintf(fromState, STATE_STR_LEN, "%d", prevStateID);
+//        snprintf(toState, STATE_STR_LEN, "%d", curStateID);
+//
+//        //Check if the prevStateID and curStateID have been added to the state machine as vertices
+//        //Check also if the edge prevStateID->curStateID has been added
+//        Agnode_t *from, *to;
+//		    Agedge_t *edge;
+//		    from = agnode(ipsm, fromState, FALSE);
+//		    if (!from) {
+//          //Add a node to the graph
+//          from = agnode(ipsm, fromState, TRUE);
+//          if (dry_run) agset(from,"color","blue");
+//          else agset(from,"color","red");
+//
+//          //Insert this newly discovered state into the states hashtable
+//          state_info_t *newState_From = (state_info_t *) ck_alloc (sizeof(state_info_t));
+//          newState_From->id = prevStateID;
+//          newState_From->is_covered = 1;
+//          newState_From->paths = 0;
+//          newState_From->paths_discovered = 0;
+//          newState_From->selected_times = 0;
+//          newState_From->fuzzs = 0;
+//          newState_From->score = 1;
+//          newState_From->selected_seed_index = 0;
+//          newState_From->seeds = NULL;
+//          newState_From->seeds_count = 0;
+//
+//          k = kh_put(hms, khms_states, prevStateID, &discard);
+//          kh_value(khms_states, k) = newState_From;
+//
+//          //Insert this into the state_ids array too
+//          state_ids = (u32 *) ck_realloc(state_ids, (state_ids_count + 1) * sizeof(u32));
+//          state_ids[state_ids_count++] = prevStateID;
+//
+//          if (prevStateID != 0) expand_was_fuzzed_map(1, 0);
+//        }
+//
+//		    to = agnode(ipsm, toState, FALSE);
+//		    if (!to) {
+//          //Add a node to the graph
+//          to = agnode(ipsm, toState, TRUE);
+//          if (dry_run) agset(to,"color","blue");
+//          else agset(to,"color","red");
+//
+//          //Insert this newly discovered state into the states hashtable
+//          state_info_t *newState_To = (state_info_t *) ck_alloc (sizeof(state_info_t));
+//          newState_To->id = curStateID;
+//          newState_To->is_covered = 1;
+//          newState_To->paths = 0;
+//          newState_To->paths_discovered = 0;
+//          newState_To->selected_times = 0;
+//          newState_To->fuzzs = 0;
+//          newState_To->score = 1;
+//          newState_To->selected_seed_index = 0;
+//          newState_To->seeds = NULL;
+//          newState_To->seeds_count = 0;
+//
+//          k = kh_put(hms, khms_states, curStateID, &discard);
+//          kh_value(khms_states, k) = newState_To;
+//
+//          //Insert this into the state_ids array too
+//          state_ids = (u32 *) ck_realloc(state_ids, (state_ids_count + 1) * sizeof(u32));
+//          state_ids[state_ids_count++] = curStateID;
+//
+//          if (curStateID != 0) expand_was_fuzzed_map(1, 0);
+//        }
+//
+//        //Check if an edge from->to exists
+//		    edge = agedge(ipsm, from, to, NULL, FALSE);
+//		    if (!edge) {
+//          //Add an edge to the graph
+//			    edge = agedge(ipsm, from, to, "new_edge", TRUE);
+//          if (dry_run) agset(edge, "color", "blue");
+//          else agset(edge, "color", "red");
+//		    }
+//
+//        //Update prevStateID
+//        prevStateID = curStateID;
+//      }
+//    }
+//
+//    //Update the dot file
+//    s32 fd;
+//    u8* tmp;
+//    tmp = alloc_printf("%s/ipsm.dot", out_dir);
+//    fd = open(tmp, O_WRONLY | O_CREAT, 0600);
+//    if (fd < 0) {
+//      PFATAL("Unable to create %s", tmp);
+//    } else {
+//      ipsm_dot_file = fdopen(fd, "w");
+//      agwrite(ipsm, ipsm_dot_file);
+//      close(fileno(ipsm_dot_file));
+//      ck_free(tmp);
+//    }
+//  }
+//
+//  //Update others no matter the new seed leads to interesting state sequence or not
+//
+//  //Annotate the regions
+//  update_region_annotations(q);
+//
+//  //Update the states hashtable to keep the list of seeds which help us to reach a specific state
+//  //Iterate over the regions & their annotated state (sub)sequences and update the hashtable accordingly
+//  //All seed should "reach" state 0 (initial state) so we add this one to the map first
+//  k = kh_get(hms, khms_states, 0);
+//  if (k != kh_end(khms_states)) {
+//    state = kh_val(khms_states, k);
+//    state->seeds = (void **) ck_realloc (state->seeds, (state->seeds_count + 1) * sizeof(void *));
+//    state->seeds[state->seeds_count] = (void *)q;
+//    state->seeds_count++;
+//
+//    was_fuzzed_map[0][q->index] = 0; //Mark it as reachable but not fuzzed
+//  } else {
+//    PFATAL("AFLNet - the states hashtable should always contain an entry of the initial state");
+//  }
+//
+//  //Now update other states
+//  for(i = 0; i < q->region_count; i++) {
+//    unsigned int regional_state_count = q->regions[i].state_count;
+//    if (regional_state_count > 0) {
+//      //reachable_state_id is the last ID in the state_sequence
+//      unsigned int reachable_state_id = q->regions[i].state_sequence[regional_state_count - 1];
+//
+//      k = kh_get(hms, khms_states, reachable_state_id);
+//      if (k != kh_end(khms_states)) {
+//        state = kh_val(khms_states, k);
+//        state->seeds = (void **) ck_realloc (state->seeds, (state->seeds_count + 1) * sizeof(void *));
+//        state->seeds[state->seeds_count] = (void *)q;
+//        state->seeds_count++;
+//      } else {
+//        //XXX. This branch is supposed to be not reachable
+//        //However, due to some undeterminism, new state could be seen during regions' annotating process
+//        //even though the state was not observed before
+//        //To completely fix this, we should fix all causes leading to potential undeterminism
+//        //For now, we just add the state into the hashtable
+//
+//        state_info_t *newState = (state_info_t *) ck_alloc (sizeof(state_info_t));
+//        newState->id = reachable_state_id;
+//        newState->is_covered = 1;
+//        newState->paths = 0;
+//        newState->paths_discovered = 0;
+//        newState->selected_times = 0;
+//        newState->fuzzs = 0;
+//        newState->score = 1;
+//        newState->selected_seed_index = 0;
+//        newState->seeds = NULL;
+//        newState->seeds = (void **) ck_realloc (newState->seeds, sizeof(void *));
+//        newState->seeds[0] = (void *)q;
+//        newState->seeds_count = 1;
+//
+//        k = kh_put(hms, khms_states, reachable_state_id, &discard);
+//        kh_value(khms_states, k) = newState;
+//
+//        //Insert this into the state_ids array too
+//        state_ids = (u32 *) ck_realloc(state_ids, (state_ids_count + 1) * sizeof(u32));
+//        state_ids[state_ids_count++] = reachable_state_id;
+//
+//        if (reachable_state_id != 0) expand_was_fuzzed_map(1, 0);
+//      }
+//
+//      was_fuzzed_map[get_state_index(reachable_state_id)][q->index] = 0; //Mark it as reachable but not fuzzed
+//    }
+//  }
+//
+//  //Update the number of paths which have traversed a specific state
+//  //It can be used for calculating fuzzing energy
+//  //A hash set is used so that the #paths is not updated more than once for one specific state
+//  khash_t(hs32) *khs_state_ids;
+//  khs_state_ids = kh_init(hs32);
+//
+//  for(i = 0; i < state_count; i++) {
+//    unsigned int state_id = state_sequence[i];
+//
+//    if (kh_get(hs32, khs_state_ids, state_id) != kh_end(khs_state_ids)) {
+//      continue;
+//    } else {
+//      kh_put(hs32, khs_state_ids, state_id, &discard);
+//      k = kh_get(hms, khms_states, state_id);
+//      if (k != kh_end(khms_states)) {
+//        kh_val(khms_states, k)->paths++;
+//      }
+//    }
+//  }
+//  kh_destroy(hs32, khs_state_ids);
+//
+//  //Update paths_discovered
+//  if (!dry_run) {
+//    k = kh_get(hms, khms_states, target_state_id);
+//    if (k != kh_end(khms_states)) {
+//      kh_val(khms_states, k)->paths_discovered++;
+//    }
+//  }
+//
+//  //Free state sequence
+//  if (state_sequence) ck_free(state_sequence);
+//}
 
-  if (!response_buf_size || !response_bytes) return;
+void create_new_state(struct queue_entry *q) {
+	state_info_t *newState = (state_info_t *) ck_alloc (sizeof(state_info_t));
+	newState->id = q->generating_state_id;
+	newState->is_covered = 1;
+	newState->paths = 0;
+	newState->paths_discovered = 0;
+	newState->selected_times = 0;
+	newState->fuzzs = 0;
+	newState->score = 1;
+	newState->selected_seed_index = 0;
+	newState->seeds = NULL;
+	newState->seeds = (void **) ck_realloc (newState->seeds, sizeof(void *));
+	newState->seeds[0] = (void *)q;
+	newState->seeds_count = 1;
 
-  unsigned int *state_sequence = (*extract_response_codes)(response_buf, response_buf_size, &state_count);
+  int discard;
+	khint_t k = kh_put(hms, khms_states, q->generating_state_id, &discard);
+	kh_value(khms_states, k) = newState;
 
-  //q->unique_state_count = get_unique_state_count(state_sequence, state_count);
-
-  if (is_state_sequence_interesting(state_sequence, state_count)) {
-    //Save the current kl_messages to a file which can be used to replay the newly discovered paths on the ipsm
-    u8 *temp_str = state_sequence_to_string(state_sequence, state_count);
-    u8 *fname = alloc_printf("%s/replayable-new-ipsm-paths/id:%s:%s", out_dir, temp_str, dry_run ? basename(q->fname) : "new");
-    save_kl_messages_to_file(kl_messages, fname, 1, messages_sent);
-    ck_free(temp_str);
-    ck_free(fname);
-
-    //Update the IPSM graph
-    if (state_count > 1) {
-      unsigned int prevStateID = state_sequence[0];
-
-      for(i=1; i < state_count; i++) {
-        unsigned int curStateID = state_sequence[i];
-        char fromState[STATE_STR_LEN], toState[STATE_STR_LEN];
-        snprintf(fromState, STATE_STR_LEN, "%d", prevStateID);
-        snprintf(toState, STATE_STR_LEN, "%d", curStateID);
-
-        //Check if the prevStateID and curStateID have been added to the state machine as vertices
-        //Check also if the edge prevStateID->curStateID has been added
-        Agnode_t *from, *to;
-		    Agedge_t *edge;
-		    from = agnode(ipsm, fromState, FALSE);
-		    if (!from) {
-          //Add a node to the graph
-          from = agnode(ipsm, fromState, TRUE);
-          if (dry_run) agset(from,"color","blue");
-          else agset(from,"color","red");
-
-          //Insert this newly discovered state into the states hashtable
-          state_info_t *newState_From = (state_info_t *) ck_alloc (sizeof(state_info_t));
-          newState_From->id = prevStateID;
-          newState_From->is_covered = 1;
-          newState_From->paths = 0;
-          newState_From->paths_discovered = 0;
-          newState_From->selected_times = 0;
-          newState_From->fuzzs = 0;
-          newState_From->score = 1;
-          newState_From->selected_seed_index = 0;
-          newState_From->seeds = NULL;
-          newState_From->seeds_count = 0;
-
-          k = kh_put(hms, khms_states, prevStateID, &discard);
-          kh_value(khms_states, k) = newState_From;
-
-          //Insert this into the state_ids array too
-          state_ids = (u32 *) ck_realloc(state_ids, (state_ids_count + 1) * sizeof(u32));
-          state_ids[state_ids_count++] = prevStateID;
-
-          if (prevStateID != 0) expand_was_fuzzed_map(1, 0);
-        }
-
-		    to = agnode(ipsm, toState, FALSE);
-		    if (!to) {
-          //Add a node to the graph
-          to = agnode(ipsm, toState, TRUE);
-          if (dry_run) agset(to,"color","blue");
-          else agset(to,"color","red");
-
-          //Insert this newly discovered state into the states hashtable
-          state_info_t *newState_To = (state_info_t *) ck_alloc (sizeof(state_info_t));
-          newState_To->id = curStateID;
-          newState_To->is_covered = 1;
-          newState_To->paths = 0;
-          newState_To->paths_discovered = 0;
-          newState_To->selected_times = 0;
-          newState_To->fuzzs = 0;
-          newState_To->score = 1;
-          newState_To->selected_seed_index = 0;
-          newState_To->seeds = NULL;
-          newState_To->seeds_count = 0;
-
-          k = kh_put(hms, khms_states, curStateID, &discard);
-          kh_value(khms_states, k) = newState_To;
-
-          //Insert this into the state_ids array too
-          state_ids = (u32 *) ck_realloc(state_ids, (state_ids_count + 1) * sizeof(u32));
-          state_ids[state_ids_count++] = curStateID;
-
-          if (curStateID != 0) expand_was_fuzzed_map(1, 0);
-        }
-
-        //Check if an edge from->to exists
-		    edge = agedge(ipsm, from, to, NULL, FALSE);
-		    if (!edge) {
-          //Add an edge to the graph
-			    edge = agedge(ipsm, from, to, "new_edge", TRUE);
-          if (dry_run) agset(edge, "color", "blue");
-          else agset(edge, "color", "red");
-		    }
-
-        //Update prevStateID
-        prevStateID = curStateID;
-      }
-    }
-
-    //Update the dot file
-    s32 fd;
-    u8* tmp;
-    tmp = alloc_printf("%s/ipsm.dot", out_dir);
-    fd = open(tmp, O_WRONLY | O_CREAT, 0600);
-    if (fd < 0) {
-      PFATAL("Unable to create %s", tmp);
-    } else {
-      ipsm_dot_file = fdopen(fd, "w");
-      agwrite(ipsm, ipsm_dot_file);
-      close(fileno(ipsm_dot_file));
-      ck_free(tmp);
-    }
-  }
-
-  //Update others no matter the new seed leads to interesting state sequence or not
-
-  //Annotate the regions
-  update_region_annotations(q);
-
-  //Update the states hashtable to keep the list of seeds which help us to reach a specific state
-  //Iterate over the regions & their annotated state (sub)sequences and update the hashtable accordingly
-  //All seed should "reach" state 0 (initial state) so we add this one to the map first
-  k = kh_get(hms, khms_states, 0);
-  if (k != kh_end(khms_states)) {
-    state = kh_val(khms_states, k);
-    state->seeds = (void **) ck_realloc (state->seeds, (state->seeds_count + 1) * sizeof(void *));
-    state->seeds[state->seeds_count] = (void *)q;
-    state->seeds_count++;
-
-    was_fuzzed_map[0][q->index] = 0; //Mark it as reachable but not fuzzed
-  } else {
-    PFATAL("AFLNet - the states hashtable should always contain an entry of the initial state");
-  }
-
-  //Now update other states
-  for(i = 0; i < q->region_count; i++) {
-    unsigned int regional_state_count = q->regions[i].state_count;
-    if (regional_state_count > 0) {
-      //reachable_state_id is the last ID in the state_sequence
-      unsigned int reachable_state_id = q->regions[i].state_sequence[regional_state_count - 1];
-
-      k = kh_get(hms, khms_states, reachable_state_id);
-      if (k != kh_end(khms_states)) {
-        state = kh_val(khms_states, k);
-        state->seeds = (void **) ck_realloc (state->seeds, (state->seeds_count + 1) * sizeof(void *));
-        state->seeds[state->seeds_count] = (void *)q;
-        state->seeds_count++;
-      } else {
-        //XXX. This branch is supposed to be not reachable
-        //However, due to some undeterminism, new state could be seen during regions' annotating process
-        //even though the state was not observed before
-        //To completely fix this, we should fix all causes leading to potential undeterminism
-        //For now, we just add the state into the hashtable
-
-        state_info_t *newState = (state_info_t *) ck_alloc (sizeof(state_info_t));
-        newState->id = reachable_state_id;
-        newState->is_covered = 1;
-        newState->paths = 0;
-        newState->paths_discovered = 0;
-        newState->selected_times = 0;
-        newState->fuzzs = 0;
-        newState->score = 1;
-        newState->selected_seed_index = 0;
-        newState->seeds = NULL;
-        newState->seeds = (void **) ck_realloc (newState->seeds, sizeof(void *));
-        newState->seeds[0] = (void *)q;
-        newState->seeds_count = 1;
-
-        k = kh_put(hms, khms_states, reachable_state_id, &discard);
-        kh_value(khms_states, k) = newState;
-
-        //Insert this into the state_ids array too
-        state_ids = (u32 *) ck_realloc(state_ids, (state_ids_count + 1) * sizeof(u32));
-        state_ids[state_ids_count++] = reachable_state_id;
-
-        if (reachable_state_id != 0) expand_was_fuzzed_map(1, 0);
-      }
-
-      was_fuzzed_map[get_state_index(reachable_state_id)][q->index] = 0; //Mark it as reachable but not fuzzed
-    }
-  }
-
-  //Update the number of paths which have traversed a specific state
-  //It can be used for calculating fuzzing energy
-  //A hash set is used so that the #paths is not updated more than once for one specific state
-  khash_t(hs32) *khs_state_ids;
-  khs_state_ids = kh_init(hs32);
-
-  for(i = 0; i < state_count; i++) {
-    unsigned int state_id = state_sequence[i];
-
-    if (kh_get(hs32, khs_state_ids, state_id) != kh_end(khs_state_ids)) {
-      continue;
-    } else {
-      kh_put(hs32, khs_state_ids, state_id, &discard);
-      k = kh_get(hms, khms_states, state_id);
-      if (k != kh_end(khms_states)) {
-        kh_val(khms_states, k)->paths++;
-      }
-    }
-  }
-  kh_destroy(hs32, khs_state_ids);
-
-  //Update paths_discovered
-  if (!dry_run) {
-    k = kh_get(hms, khms_states, target_state_id);
-    if (k != kh_end(khms_states)) {
-      kh_val(khms_states, k)->paths_discovered++;
-    }
-  }
-
-  //Free state sequence
-  if (state_sequence) ck_free(state_sequence);
+	//Insert this into the state_ids array too
+	state_ids = (u32 *) ck_realloc(state_ids, (state_ids_count + 1) * sizeof(u32));
+	state_ids[state_ids_count++] = q->generating_state_id;
 }
 
 /* Send (mutated) messages in order to the server under test */
@@ -1636,7 +1661,6 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
     //Keep track the maximal number of seed regions
     //We use this for some optimization to reduce the overhead while following the server's sequence diagram
     if ((corpus_read_or_sync == 1) && (q->region_count > max_seed_region_count)) max_seed_region_count = q->region_count;
-	q->M2_start_region_ID = get_M2_start_region_ID(fname);
 
   } else {
     //Convert the linked list kl_messages to regions
@@ -1673,9 +1697,9 @@ EXP_ST void destroy_queue(void) {
     ck_free(q->trace_mini);
     u32 i;
     //Free AFLNet-specific data structure
-    for (i = 0; i < q->region_count; i++) {
-      if (q->regions[i].state_sequence) ck_free(q->regions[i].state_sequence);
-    }
+    //for (i = 0; i < q->region_count; i++) {
+    //  if (q->regions[i].state_sequence) ck_free(q->regions[i].state_sequence);
+    //}
     if (q->regions) ck_free(q->regions);
     ck_free(q);
     q = n;
@@ -2244,18 +2268,18 @@ EXP_ST void setup_shm(void) {
 /********************************************************/
 /* 		StateAFL bypasses response code extraction 		*/
 /* 		 and build a generic request extraction 		*/
-unsigned int* extract_response_codes_generic(unsigned char* buf, unsigned int buf_size, unsigned int* state_count_ref) {
-
-  unsigned int state_tracer_count_all = state_shared_ptr->seq_len;
-
-  *state_count_ref = state_tracer_count_all;
-
-  unsigned int * state_sequence = ck_alloc( (*state_count_ref)*sizeof(int) );
-  memcpy(state_sequence, state_shared_ptr->seq, *state_count_ref * sizeof(unsigned int));
-
-
-  return state_sequence;
-}
+//unsigned int* extract_response_codes_generic(unsigned char* buf, unsigned int buf_size, unsigned int* state_count_ref) {
+//
+//  unsigned int state_tracer_count_all = state_shared_ptr->seq_len;
+//
+//  *state_count_ref = state_tracer_count_all;
+//
+//  unsigned int * state_sequence = ck_alloc( (*state_count_ref)*sizeof(int) );
+//  memcpy(state_sequence, state_shared_ptr->seq, *state_count_ref * sizeof(unsigned int));
+//
+//
+//  return state_sequence;
+//}
 
 //static unsigned int mutated_region_count = 0;
 //static region_t* mutated_regions = NULL;
@@ -2390,12 +2414,13 @@ static void read_testcases(void) {
 
   }
 
-  u8* replay_fname = "replay";
-  u8* len_fname = "length";
+  u8* suffix_replay = "replay";
+  u8* suffix_length = "length";
+	u8* prefix = "seed-state";
 
   for (i = 0; i < nl_cnt; i++) {
 
-		if(strstr(nl[i]->d_name,replay_fname)) {
+		if(strstr(nl[i]->d_name, suffix_replay)) {
 
 			struct stat st;
 
@@ -2431,14 +2456,26 @@ static void read_testcases(void) {
 			if (!access(dfn, F_OK)) passed_det = 1;
 			ck_free(dfn);
 
-			// build its corresponding length filename
-			u8* cp_fname;
-			strncpy(cp_fname, nl[i]->d_name, len(nl[i]->d_name));
-			u8* replay_pos = strstr(cp_fname, replay_fname);
+			/* Build its corresponding length filename */
+			u8 cp_fname[strlen(fn)];
+			strncpy(cp_fname, fn, strlen(fn));
+			u8* replay_pos = strstr(cp_fname, suffix_replay);
 			if (replay_pos != NULL) {
-					memcpy(replay_pos, len_fname, 6);
+				memcpy(replay_pos, suffix_length, 6);
+				// get the length value by reading the file
+				M2_start_region_ID = get_M2_start_region_ID(cp_fname);
 			}
-			// TODO: get the length value by reading the file
+			else {
+				FATAL("Filename copy failed '%s'->'%s'", fn, cp_fname);
+			}
+
+			/* Get state ID from filename and create the state */
+			/* A seed filename has the shape "seed-stateXX.replay"
+				 where XX is the ID of the state (1 or 2 digit) */
+			u32 state_id_length = (strlen(fn) - strlen(suffix_replay)) - strlen(prefix) - 1;
+			u8 state_id_str[state_id_length];
+			memcpy(state_id_str, &fn[strlen(prefix)], state_id_length);
+			target_state_id = atoi(state_id_str);
 
 			add_to_queue(fn, st.st_size, passed_det);
 		}
@@ -3681,13 +3718,14 @@ static void perform_dry_run(char** argv) {
     /* AFLNet construct the kl_messages linked list for this queue entry*/
     kl_messages = construct_kl_messages(q->fname, q->regions, q->region_count);
 
-	M2_start_region_ID = get_M2_start_region_ID(fname);
+		M2_start_region_ID = q->M2_start_region_ID;
 
     res = calibrate_case(argv, q, use_mem, 0, 1);
     ck_free(use_mem);
 
     /* Update state-aware variables (e.g., state machine, regions and their annotations */
-    if (state_aware_mode) update_state_aware_variables(q, 1);
+    //if (state_aware_mode) update_state_aware_variables(q, 1);
+    if (state_aware_mode) create_new_state(q);
 
     /* save the seed to file for replaying */
     u8 *fn_replay = alloc_printf("%s/replayable-queue/%s", out_dir, basename(q->fname));
@@ -4121,7 +4159,7 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     /* We use the actual length of all messages (full_len), not the len of the mutated message subsequence (len)*/
     add_to_queue(fn, full_len, 0);
 
-    if (state_aware_mode) update_state_aware_variables(queue_top, 0);
+    //if (state_aware_mode) update_state_aware_variables(queue_top, 0);
 
     /* save the seed to file for replaying */
     u8 *fn_replay = alloc_printf("%s/replayable-queue/%s", out_dir, basename(queue_top->fname));
@@ -5586,7 +5624,7 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
   fault = run_target(argv, exec_tmout);
 
   //Update fuzz count, no matter whether the generated test is interesting or not
-  if (state_aware_mode) update_fuzzs();
+  //if (state_aware_mode) update_fuzzs();
 
   if (stop_soon) return 1;
 
@@ -6001,10 +6039,11 @@ AFLNET_REGIONS_SELECTION:;
 
   if (state_aware_mode) {
 
-	// M2 start point is defined in the queue struct
-	M2_start_region_ID = queue_cur->M2_start_region_ID;
-	// M2 size is selected randomly
-    M2_region_count = UR(total_region - M2_start_region_ID);
+		/* M2 start point is defined in the queue struct */
+		M2_start_region_ID = queue_cur->M2_start_region_ID;
+		/* M2 size is selected randomly */
+		u32 total_region = queue_cur->region_count;
+		M2_region_count = UR(total_region - M2_start_region_ID);
 
     ///* In state aware mode, select M2 based on the targeted state ID */
     //u32 total_region = queue_cur->region_count;
@@ -9186,7 +9225,7 @@ int main(int argc, char** argv) {
 
 		// bypass the protocol selection
         extract_requests = &extract_requests_generic;
-        extract_response_codes = &extract_response_codes_generic;
+        //extract_response_codes = &extract_response_codes_generic;
 
         protocol_selected = 1;
 

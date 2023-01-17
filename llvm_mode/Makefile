@@ -49,10 +49,11 @@ endif
 # We were using llvm-config --bindir to get the location of clang, but
 # this seems to be busted on some distros, so using the one in $PATH is
 # probably better.
+CLANG_PATH	 = `$(LLVM_CONFIG) --bindir`
 
 ifeq "$(origin CC)" "default"
-  CC         = clang
-  CXX        = clang++
+  CC         = $(CLANG_PATH)/clang
+  CXX        = $(CLANG_PATH)/clang++
 endif
 
 ifndef AFL_TRACE_PC
