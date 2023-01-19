@@ -2457,8 +2457,7 @@ static void read_testcases(void) {
 			ck_free(dfn);
 
 			/* Build its corresponding length filename */
-			u8 cp_fname[strlen(fn)];
-			strncpy(cp_fname, fn, strlen(fn));
+			u8* cp_fname = alloc_printf("%s", fn);
 			u8* replay_pos = strstr(cp_fname, suffix_replay);
 			if (replay_pos != NULL) {
 				memcpy(replay_pos, suffix_length, 6);
@@ -2468,6 +2467,7 @@ static void read_testcases(void) {
 			else {
 				FATAL("Filename copy failed '%s'->'%s'", fn, cp_fname);
 			}
+			ck_free(cp_fname);
 
 			/* Get state ID from filename and create the state */
 			/* A seed filename has the shape "seed-stateXX.replay"
