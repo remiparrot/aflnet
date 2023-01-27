@@ -5459,6 +5459,7 @@ static void show_stats(void) {
   /* Show debugging stats for AFLNet only when AFLNET_DEBUG environment variable is set */
   if (getenv("AFLNET_DEBUG") && (atoi(getenv("AFLNET_DEBUG")) == 1) && state_aware_mode) {
     SAYF(cRST "\n\nMax_seed_region_count: %-4s, current_kl_messages_size: %-4s\n\n", DI(max_seed_region_count), DI(kl_messages->size));
+    //SAYF(cRST "target_state_id: %-4s, M2_start_region_ID: %-4s\n\n", DI(target_state_id), DI(M2_start_region_ID));
     SAYF(cRST "State IDs and its #selected_times,"cCYA  "#fuzzs,"cLRD "#discovered_paths,"cGRA "#excersing_paths:\n");
 
     khint_t k;
@@ -6300,8 +6301,8 @@ AFLNET_REGIONS_SELECTION:;
 
     M2_start_region_ID = UR(total_region);
     M2_region_count = UR(total_region - M2_start_region_ID);
-    if (M2_region_count == 0) M2_region_count++; //Mutate one region at least
   }
+  if (M2_region_count == 0) M2_region_count++; //Mutate one region at least
 
   /* Construct the kl_messages linked list and identify boundary pointers (M2_prev and M2_next) */
   kl_messages = construct_kl_messages(queue_cur->fname, queue_cur->regions, queue_cur->region_count);
