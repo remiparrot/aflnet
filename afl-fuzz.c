@@ -5480,6 +5480,7 @@ static void show_stats(void) {
         if ((i + 1) % 3 == 0) SAYF("\n");
       }
     }
+		SAYF("\n");
 		//if(global_regions) {
 		//	SAYF(cRST "global_region_count: %-4s\n\n", DI(global_region_count));
 		//	SAYF(cCYA "[global_regions[i].start_byte"cRST ", "cLRD "global_regions[i].end_byte]\n");
@@ -6197,6 +6198,7 @@ int regions_remove_bytes(region_t* regions, unsigned int region_count, unsigned 
 /* Take the current entry from the queue, fuzz it for a while. This
    function is a tad too long... returns 0 if fuzzed successfully, 1 if
    skipped or bailed out. */
+static havoc_case = 0;
 
 static u8 fuzz_one(char** argv) {
 
@@ -7430,9 +7432,12 @@ havoc_stage:
 
     stage_cur_val = use_stacking;
 
-    for (i = 0; i < use_stacking; i++) {
+    //for (i = 0; i < use_stacking; i++) {
+		havoc_case++;
+		if(havoc_case>15 + 2 + (region_level_mutation ? 4 : 0)) havoc_case=0;
 
-      switch (UR(15 + 2 + (region_level_mutation ? 4 : 0))) {
+      switch (havoc_case) {
+      //switch (UR(15 + 2 + (region_level_mutation ? 4 : 0))) {
 
         case 0:
 
@@ -7954,7 +7959,7 @@ havoc_stage:
 
       }
 
-    }
+    //}
 
     if (common_fuzz_stuff(argv, out_buf, temp_len))
       goto abandon_entry;
