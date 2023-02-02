@@ -411,11 +411,16 @@ khash_t(hms) *khms_states;
 //M2_next points to the first message of M3 (i.e., suffix)
 //If M3 is empty, M2_next point to the end of the kl_messages linked list
 kliter_t(lms) *M2_prev, *M2_next;
-u32 M2_start_region_ID;
+u32 init_M2_start_region_ID;
 
 //Function pointers pointing to Protocol-specific functions
 //unsigned int* (*extract_response_codes)(unsigned char* buf, unsigned int buf_size, unsigned int* state_count_ref) = extract_response_codes_generic;
 region_t* (*extract_requests)(unsigned char* buf, unsigned int buf_size, unsigned int* region_count_ref) = extract_requests_generic;
+
+//static unsigned int global_region_count = 0;
+//static region_t* global_regions = NULL;
+
+#define DEBUG_REGIONS
 
 /* Initialize the implemented state machine as a graphviz graph */
 void setup_ipsm()
@@ -1011,6 +1016,8 @@ void create_new_state(struct queue_entry *q) {
 	//Insert this into the state_ids array too
 	state_ids = (u32 *) ck_realloc(state_ids, (state_ids_count + 1) * sizeof(u32));
 	state_ids[state_ids_count++] = q->generating_state_id;
+
+	expand_was_fuzzed_map(1, 0);
 
 	//printf("new state: {\n");
 	//printf("\tid=%u\n",newState->id);
@@ -1623,7 +1630,7 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
   q->generating_state_id = target_state_id;
   q->is_initial_seed = 0;
   //q->unique_state_count = 0;
-  q->M2_start_region_ID = M2_start_region_ID;
+  q->M2_start_region_ID = init_M2_start_region_ID;
 
   if (q->depth > max_depth) max_depth = q->depth;
 
@@ -2298,8 +2305,6 @@ region_t* extract_requests_generic(unsigned char* buf, unsigned int buf_size, un
   unsigned int region_count = 0;
   region_t *regions = NULL;
 
-  unsigned int cur_start = 0;
-
   if(mutated_regions != NULL && mutated_region_count > 0) {
 
     *region_count_ref = mutated_region_count;
@@ -2311,37 +2316,38 @@ region_t* extract_requests_generic(unsigned char* buf, unsigned int buf_size, un
   }
 
 
-  unsigned int byte_count = 0;
+  unsigned int cur_start = 0;
+	unsigned int byte_count = 0;
 
-  while(byte_count < buf_size) {
+	while(byte_count < buf_size) {
 
-    if(byte_count + 4 >= buf_size) {
-      PFATAL("AFLNet - Erroreous message length in input file");
-    }
+		if(byte_count + 4 >= buf_size) {
+			PFATAL("AFLNet - Erroreous message length in input file");
+		}
 
-    unsigned int next_message_len = *((unsigned int *)(void *)&buf[byte_count]);
+		unsigned int next_message_len = *((unsigned int *)(void *)&buf[byte_count]);
 
-    byte_count += sizeof(unsigned int);
+		byte_count += sizeof(unsigned int);
 
-    if(byte_count + next_message_len > buf_size) {
-      PFATAL("AFLNet - Erroneous message length in input file (2)");
-    }
+		if(byte_count + next_message_len > buf_size) {
+			PFATAL("AFLNet - Erroneous message length in input file (2)");
+		}
 
-    region_count++;
+		region_count++;
 
-    regions = (region_t *)ck_realloc(regions, region_count * sizeof(region_t));
+		regions = (region_t *)ck_realloc(regions, region_count * sizeof(region_t));
 
-    regions[region_count - 1].start_byte = cur_start;
-    regions[region_count - 1].end_byte = cur_start + next_message_len - 1;
-    //regions[region_count - 1].state_sequence = NULL;
-    //regions[region_count - 1].state_count = 0;
+		regions[region_count - 1].start_byte = cur_start;
+		regions[region_count - 1].end_byte = cur_start + next_message_len - 1;
+		//regions[region_count - 1].state_sequence = NULL;
+		//regions[region_count - 1].state_count = 0;
 
-    cur_start += next_message_len;
-    byte_count += next_message_len;
+		cur_start += next_message_len;
+		byte_count += next_message_len;
 
-  }
+	}
 
-  *region_count_ref = region_count;
+	*region_count_ref = region_count;
   return regions;
 
 }
@@ -2480,7 +2486,7 @@ static void read_testcases(void) {
 			if (replay_pos != NULL) {
 				memcpy(replay_pos, suffix_length, 6);
 				// get the length value by reading the file
-				M2_start_region_ID = get_M2_start_region_ID(cp_fname);
+				init_M2_start_region_ID = get_M2_start_region_ID(cp_fname);
 			}
 			else {
 				FATAL("Filename copy failed '%s'->'%s'", fn, cp_fname);
@@ -3727,8 +3733,6 @@ static void perform_dry_run(char** argv) {
 
     /* AFLNet construct the kl_messages linked list for this queue entry*/
     kl_messages = construct_kl_messages(q->fname, q->regions, q->region_count);
-
-		M2_start_region_ID = q->M2_start_region_ID;
 
     res = calibrate_case(argv, q, use_mem, 0, 1);
     ck_free(use_mem);
@@ -5459,7 +5463,7 @@ static void show_stats(void) {
   /* Show debugging stats for AFLNet only when AFLNET_DEBUG environment variable is set */
   if (getenv("AFLNET_DEBUG") && (atoi(getenv("AFLNET_DEBUG")) == 1) && state_aware_mode) {
     SAYF(cRST "\n\nMax_seed_region_count: %-4s, current_kl_messages_size: %-4s\n\n", DI(max_seed_region_count), DI(kl_messages->size));
-    //SAYF(cRST "target_state_id: %-4s, M2_start_region_ID: %-4s\n\n", DI(target_state_id), DI(M2_start_region_ID));
+    //SAYF(cRST "target_state_id: %-4s, init_M2_start_region_ID: %-4s\n\n", DI(target_state_id), DI(init_M2_start_region_ID));
     SAYF(cRST "State IDs and its #selected_times,"cCYA  "#fuzzs,"cLRD "#discovered_paths,"cGRA "#excersing_paths:\n");
 
     khint_t k;
@@ -5476,6 +5480,15 @@ static void show_stats(void) {
         if ((i + 1) % 3 == 0) SAYF("\n");
       }
     }
+		//if(global_regions) {
+		//	SAYF(cRST "global_region_count: %-4s\n\n", DI(global_region_count));
+		//	SAYF(cCYA "[global_regions[i].start_byte"cRST ", "cLRD "global_regions[i].end_byte]\n");
+		//	for(u32 i_region=0; i_region<global_region_count; i_region++) {
+		//		SAYF(cCYA "[%6s,"cLRD "%6s]", DI(global_regions[i_region].start_byte), DI(global_regions[i_region].end_byte));
+    //    if ((i_region + 1) % 18 == 0) SAYF("\n");
+		//	}
+		//	SAYF("%30s\n\n"," ");
+		//}
   }
 
   /* Hallelujah! */
@@ -5617,6 +5630,10 @@ EXP_ST u8 common_fuzz_stuff(char** argv, u8* out_buf, u32 len) {
   u32 region_count = 0;
   region_t *regions = (*extract_requests)(out_buf, len, &region_count);
   if (!region_count) PFATAL("AFLNet Region count cannot be Zero");
+
+	//global_region_count = region_count;
+  //global_regions = ck_alloc(global_region_count * sizeof(region_t));
+  //memcpy(global_regions, regions, global_region_count * sizeof(region_t));
 
   // update kl_messages linked list
   u32 i;
@@ -6034,6 +6051,7 @@ void regions_add_bytes(region_t* regions, unsigned int region_count, unsigned in
 
 #ifdef DEBUG_REGIONS
    FILE * log=fopen("./regions.txt", "a");
+	 if (!log) PFATAL("Unable to open './regions.txt'");
    fprintf(log, "add position=%d, bytes=%d\n", position, added_bytes);
    fprintf(log, "regions = %p, region_count = %d\n", regions, region_count);
 
@@ -6068,6 +6086,7 @@ int regions_remove_bytes(region_t* regions, unsigned int region_count, unsigned 
 
 #ifdef DEBUG_REGIONS
    FILE * log=fopen("./regions.txt", "a");
+	 if (!log) PFATAL("Unable to open './regions.txt'");
     fprintf(log, "remove position=%d, bytes=%d\n", position, removed_bytes);
     fprintf(log, "regions = %p, region_count = %d\n", regions, region_count);
 
@@ -6141,20 +6160,28 @@ int regions_remove_bytes(region_t* regions, unsigned int region_count, unsigned 
       unsigned int new_region_count = region_count - removed_regions;
       region_t* new_regions = ck_alloc(new_region_count * sizeof(region_t));
 
-      int j=new_region_count-1;
-      for(int i=region_count-1; i>=0; i--) {
+      //int j=new_region_count-1;
+      //for(int i=region_count-1; i>=0; i--) {
 
-        if(regions[i].start_byte == -1 && regions[i].end_byte == -1) {
-          continue;
-        }
+      //  if(regions[i].start_byte == -1 && regions[i].end_byte == -1) {
+      //    continue;
+      //  }
 
-        new_regions[j].start_byte = regions[i].start_byte;
-        new_regions[j].end_byte = regions[i].end_byte;
-        new_regions[j].state_sequence = regions[i].state_sequence;
-        new_regions[j].state_count = regions[i].state_count;
+      //  new_regions[j].start_byte = regions[i].start_byte;
+      //  new_regions[j].end_byte = regions[i].end_byte;
+      //  //new_regions[j].state_sequence = regions[i].state_sequence;
+      //  //new_regions[j].state_count = regions[i].state_count;
 
-        j--;
-      }
+      //  j--;
+      //}
+			int j=0;
+			for(unsigned i=0; i<region_count; i++) {
+				if(regions[i].start_byte!=-1 || regions[i].start_byte!=-1) {
+					new_regions[j].start_byte = regions[i].start_byte;
+					new_regions[j].end_byte = regions[i].end_byte;
+					j--;
+				}
+			}
 
       ck_free(mutated_regions);
       mutated_regions = new_regions;
@@ -6237,8 +6264,7 @@ AFLNET_REGIONS_SELECTION:;
 
   cur_depth = queue_cur->depth;
 
-  //u32 M2_start_region_ID = 0, M2_region_count = 0;
-  u32 M2_region_count = 0;
+  u32 M2_start_region_ID = 0, M2_region_count = 0;
   /* Identify the prefix M1, the candidate subsequence M2, and the suffix M3. See AFLNet paper */
   /* In this implementation, we only need to indentify M2_start_region_ID which is the first region of M2
   and M2_region_count which is the total number of regions in M2. How the information is identified is
@@ -6291,8 +6317,8 @@ AFLNET_REGIONS_SELECTION:;
     //    M2_region_count++;
     //  }
 
-    //  //Handle corner case(s) and skip the current queue entry
-    //  if (M2_start_region_ID >= queue_cur->region_count) return 1;
+      //Handle corner case(s) and skip the current queue entry
+      if (M2_start_region_ID >= queue_cur->region_count) return 1;
     //}
   } else {
     /* Select M2 randomly */
@@ -6356,6 +6382,14 @@ AFLNET_REGIONS_SELECTION:;
   //Update regions to track mutations
   unsigned int orig_region_count = M2_region_count;
   region_t* orig_regions = &queue_cur->regions[M2_start_region_ID];
+	// shift all regions to make them start at byte 0
+	if(orig_region_count > 0) {
+		int orig_regions_offset = orig_regions[0].start_byte;
+		for(u32 i_region=0; i_region<orig_region_count; i_region++) {
+			orig_regions[i_region].start_byte -= orig_regions_offset;
+			orig_regions[i_region].end_byte -= orig_regions_offset;
+		}
+	}
 
   mutated_region_count = orig_region_count;
   mutated_regions = ck_alloc(orig_region_count * sizeof(region_t));
@@ -8094,6 +8128,7 @@ retry_splicing:
 
 #ifdef DEBUG_REGIONS
    FILE * log=fopen("./regions.txt", "a");
+	 if (!log) PFATAL("Unable to open './regions.txt'");
    fprintf(log, "splicing at position=%d\n", split_at);
 
    fprintf(log, "FIRST\n");
@@ -8281,7 +8316,7 @@ static void sync_fuzzers(char** argv) {
         if (stop_soon) return;
 
         /* AFLNet: set this flag to enable request extractions while adding new seed to the queue */
-        corpus_read_or_sync = 1;
+        corpus_read_or_sync = 2;
 
         syncing_party = sd_ent->d_name;
         queued_imported += save_if_interesting(argv, mem, st.st_size, fault);
