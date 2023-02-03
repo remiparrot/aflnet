@@ -411,7 +411,7 @@ khash_t(hms) *khms_states;
 //M2_next points to the first message of M3 (i.e., suffix)
 //If M3 is empty, M2_next point to the end of the kl_messages linked list
 kliter_t(lms) *M2_prev, *M2_next;
-u32 init_M2_start_region_ID;
+u32 M2_start_region_ID;
 
 //Function pointers pointing to Protocol-specific functions
 //unsigned int* (*extract_response_codes)(unsigned char* buf, unsigned int buf_size, unsigned int* state_count_ref) = extract_response_codes_generic;
@@ -769,8 +769,22 @@ struct queue_entry *choose_seed(u32 target_state_id, u8 mode)
 }
 
 /* Update state-aware variables */
-//void update_state_aware_variables(struct queue_entry *q, u8 dry_run)
-//{
+void update_state_aware_variables(struct queue_entry *q, u8 dry_run)
+{
+  //Update the states hashtable to keep the list of seeds which help us to reach a specific state
+  state_info_t *state;
+  khint_t k = kh_get(hms, khms_states, target_state_id);
+  if (k != kh_end(khms_states)) {
+    state = kh_val(khms_states, k);
+    state->seeds = (void **) ck_realloc (state->seeds, (state->seeds_count + 1) * sizeof(void *));
+    state->seeds[state->seeds_count] = (void *)q;
+    state->seeds_count++;
+
+    was_fuzzed_map[get_state_index(target_state_id)][q->index] = 0; //Mark it as reachable but not fuzzed
+  } else {
+    PFATAL("AFLNet - the states hashtable should always contain an entry of the initial state");
+  }
+
 //  khint_t k;
 //  int discard, i;
 //  state_info_t *state;
@@ -992,7 +1006,7 @@ struct queue_entry *choose_seed(u32 target_state_id, u8 mode)
 //
 //  //Free state sequence
 //  if (state_sequence) ck_free(state_sequence);
-//}
+}
 
 void create_new_state(struct queue_entry *q) {
 	state_info_t *newState = (state_info_t *) ck_alloc (sizeof(state_info_t));
@@ -1018,6 +1032,8 @@ void create_new_state(struct queue_entry *q) {
 	state_ids[state_ids_count++] = q->generating_state_id;
 
 	expand_was_fuzzed_map(1, 0);
+  
+	was_fuzzed_map[get_state_index(q->generating_state_id)][q->index] = 0; //Mark it as reachable but not fuzzed
 
 	//printf("new state: {\n");
 	//printf("\tid=%u\n",newState->id);
@@ -1630,7 +1646,7 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
   q->generating_state_id = target_state_id;
   q->is_initial_seed = 0;
   //q->unique_state_count = 0;
-  q->M2_start_region_ID = init_M2_start_region_ID;
+  q->M2_start_region_ID = M2_start_region_ID;
 
   if (q->depth > max_depth) max_depth = q->depth;
 
@@ -2486,7 +2502,7 @@ static void read_testcases(void) {
 			if (replay_pos != NULL) {
 				memcpy(replay_pos, suffix_length, 6);
 				// get the length value by reading the file
-				init_M2_start_region_ID = get_M2_start_region_ID(cp_fname);
+				M2_start_region_ID = get_M2_start_region_ID(cp_fname);
 			}
 			else {
 				FATAL("Filename copy failed '%s'->'%s'", fn, cp_fname);
@@ -4227,7 +4243,7 @@ static u8 save_if_interesting(char** argv, void* mem, u32 len, u8 fault) {
     /* We use the actual length of all messages (full_len), not the len of the mutated message subsequence (len)*/
     add_to_queue(fn, full_len, 0);
 
-    //if (state_aware_mode) update_state_aware_variables(queue_top, 0);
+    if (state_aware_mode) update_state_aware_variables(queue_top, 0);
 
     /* save the seed to file for replaying */
     u8 *fn_replay = alloc_printf("%s/replayable-queue/%s", out_dir, basename(queue_top->fname));
@@ -5463,7 +5479,7 @@ static void show_stats(void) {
   /* Show debugging stats for AFLNet only when AFLNET_DEBUG environment variable is set */
   if (getenv("AFLNET_DEBUG") && (atoi(getenv("AFLNET_DEBUG")) == 1) && state_aware_mode) {
     SAYF(cRST "\n\nMax_seed_region_count: %-4s, current_kl_messages_size: %-4s\n\n", DI(max_seed_region_count), DI(kl_messages->size));
-    //SAYF(cRST "target_state_id: %-4s, init_M2_start_region_ID: %-4s\n\n", DI(target_state_id), DI(init_M2_start_region_ID));
+    //SAYF(cRST "target_state_id: %-4s, M2_start_region_ID: %-4s\n\n", DI(target_state_id), DI(M2_start_region_ID));
     SAYF(cRST "State IDs and its #selected_times,"cCYA  "#fuzzs,"cLRD "#discovered_paths,"cGRA "#excersing_paths:\n");
 
     khint_t k;
@@ -6198,7 +6214,7 @@ int regions_remove_bytes(region_t* regions, unsigned int region_count, unsigned 
 /* Take the current entry from the queue, fuzz it for a while. This
    function is a tad too long... returns 0 if fuzzed successfully, 1 if
    skipped or bailed out. */
-static havoc_case = 0;
+static unsigned havoc_case = 0;
 
 static u8 fuzz_one(char** argv) {
 
@@ -6266,7 +6282,8 @@ AFLNET_REGIONS_SELECTION:;
 
   cur_depth = queue_cur->depth;
 
-  u32 M2_start_region_ID = 0, M2_region_count = 0;
+  //u32 M2_start_region_ID = 0, M2_region_count = 0;
+  u32 M2_region_count = 0;
   /* Identify the prefix M1, the candidate subsequence M2, and the suffix M3. See AFLNet paper */
   /* In this implementation, we only need to indentify M2_start_region_ID which is the first region of M2
   and M2_region_count which is the total number of regions in M2. How the information is identified is
