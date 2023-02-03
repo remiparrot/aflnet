@@ -1724,9 +1724,9 @@ EXP_ST void destroy_queue(void) {
     ck_free(q->trace_mini);
     u32 i;
     //Free AFLNet-specific data structure
-    //for (i = 0; i < q->region_count; i++) {
-    //  if (q->regions[i].state_sequence) ck_free(q->regions[i].state_sequence);
-    //}
+    for (i = 0; i < q->region_count; i++) {
+      if (q->regions[i].state_sequence) ck_free(q->regions[i].state_sequence);
+    }
     if (q->regions) ck_free(q->regions);
     ck_free(q);
     q = n;
@@ -2200,7 +2200,6 @@ static void update_bitmap_score(struct queue_entry* q) {
    all fuzzing steps. */
 
 static void cull_queue(void) {
-	//printf("cull_queue\n");
 
   struct queue_entry* q;
   static u8 temp_v[MAP_SIZE >> 3];
@@ -2244,8 +2243,7 @@ static void cull_queue(void) {
 			//printf("ici\n");
       //if (!top_rated[i]->was_fuzzed) pending_favored++;
       /* AFLNet takes into account more information to make this decision */
-      //if ((top_rated[i]->generating_state_id == target_state_id || top_rated[i]->is_initial_seed) && (was_fuzzed_map[get_state_index(target_state_id)][top_rated[i]->index] == 0)) pending_favored++;
-      if ((top_rated[i]->generating_state_id == target_state_id || top_rated[i]->is_initial_seed)) pending_favored++;
+      if ((top_rated[i]->generating_state_id == target_state_id || top_rated[i]->is_initial_seed) && (was_fuzzed_map[get_state_index(target_state_id)][top_rated[i]->index] == 0)) pending_favored++;
 			//printf("là\n");
 
     }
@@ -2445,9 +2443,9 @@ static void read_testcases(void) {
 
   }
 
-  u8* suffix_replay = "replay";
-  u8* suffix_length = "length";
-	u8* prefix = "seed-state";
+  u8* suffix_replay = alloc_printf("replay");
+  u8* suffix_length = alloc_printf("length");
+	u8* prefix = alloc_printf("seed-state");
 
   for (i = 0; i < nl_cnt; i++) {
 
@@ -2456,11 +2454,16 @@ static void read_testcases(void) {
 			/* Get state ID from filename and create the state */
 			/* A seed filename has the shape "seed-stateXX.replay"
 				 where XX is the ID of the state (1 or 2 digit) */
-			u32 state_id_length = (strlen(nl[i]->d_name) - strlen(suffix_replay)) - strlen(prefix) - 1;
-			u8 state_id_str[state_id_length+1];
+			u32 state_id_length = 0;
+			while(nl[i]->d_name[state_id_length + 10] != '.') {
+				state_id_length++;
+			}
+			//(strlen(nl[i]->d_name) - strlen(suffix_replay)) - strlen(prefix) - 1;
+			u8* state_id_str = ck_alloc((state_id_length+1)*sizeof(u8));
 			memcpy(state_id_str, &nl[i]->d_name[strlen(prefix)], state_id_length);
 			state_id_str[state_id_length]='\0';
 			target_state_id = atoi(state_id_str);
+			ck_free(state_id_str);
 
 			struct stat st;
 
@@ -2513,6 +2516,10 @@ static void read_testcases(void) {
 		}
 
   }
+
+	ck_free(suffix_replay);
+	ck_free(suffix_length);
+	ck_free(prefix);
 
   /* AFLNet: unset this flag to disable request extractions while adding new seed to the queue */
   corpus_read_or_sync = 0;
@@ -5479,7 +5486,7 @@ static void show_stats(void) {
   /* Show debugging stats for AFLNet only when AFLNET_DEBUG environment variable is set */
   if (getenv("AFLNET_DEBUG") && (atoi(getenv("AFLNET_DEBUG")) == 1) && state_aware_mode) {
     SAYF(cRST "\n\nMax_seed_region_count: %-4s, current_kl_messages_size: %-4s\n\n", DI(max_seed_region_count), DI(kl_messages->size));
-    //SAYF(cRST "target_state_id: %-4s, M2_start_region_ID: %-4s\n\n", DI(target_state_id), DI(M2_start_region_ID));
+    SAYF(cRST "target_state_id: %-4s, M2_start_region_ID: %-4s\n\n", DI(target_state_id), DI(M2_start_region_ID));
     SAYF(cRST "State IDs and its #selected_times,"cCYA  "#fuzzs,"cLRD "#discovered_paths,"cGRA "#excersing_paths:\n");
 
     khint_t k;
@@ -6177,28 +6184,28 @@ int regions_remove_bytes(region_t* regions, unsigned int region_count, unsigned 
       unsigned int new_region_count = region_count - removed_regions;
       region_t* new_regions = ck_alloc(new_region_count * sizeof(region_t));
 
-      //int j=new_region_count-1;
-      //for(int i=region_count-1; i>=0; i--) {
+      int j=new_region_count-1;
+      for(int i=region_count-1; i>=0; i--) {
 
-      //  if(regions[i].start_byte == -1 && regions[i].end_byte == -1) {
-      //    continue;
-      //  }
+        if(regions[i].start_byte == -1 && regions[i].end_byte == -1) {
+          continue;
+        }
 
-      //  new_regions[j].start_byte = regions[i].start_byte;
-      //  new_regions[j].end_byte = regions[i].end_byte;
-      //  //new_regions[j].state_sequence = regions[i].state_sequence;
-      //  //new_regions[j].state_count = regions[i].state_count;
+        new_regions[j].start_byte = regions[i].start_byte;
+        new_regions[j].end_byte = regions[i].end_byte;
+        //new_regions[j].state_sequence = regions[i].state_sequence;
+        //new_regions[j].state_count = regions[i].state_count;
 
-      //  j--;
-      //}
-			int j=0;
-			for(unsigned i=0; i<region_count; i++) {
-				if(regions[i].start_byte!=-1 || regions[i].start_byte!=-1) {
-					new_regions[j].start_byte = regions[i].start_byte;
-					new_regions[j].end_byte = regions[i].end_byte;
-					j--;
-				}
-			}
+        j--;
+      }
+			//int j=0;
+			//for(unsigned i=0; i<region_count; i++) {
+			//	if(regions[i].start_byte!=-1 || regions[i].start_byte!=-1) {
+			//		new_regions[j].start_byte = regions[i].start_byte;
+			//		new_regions[j].end_byte = regions[i].end_byte;
+			//		j--;
+			//	}
+			//}
 
       ck_free(mutated_regions);
       mutated_regions = new_regions;
@@ -6400,7 +6407,8 @@ AFLNET_REGIONS_SELECTION:;
 
   //Update regions to track mutations
   unsigned int orig_region_count = M2_region_count;
-  region_t* orig_regions = &queue_cur->regions[M2_start_region_ID];
+  region_t* orig_regions = ck_alloc(orig_region_count * sizeof(region_t));
+	memcpy(orig_regions, &queue_cur->regions[M2_start_region_ID], orig_region_count *sizeof(region_t));
 	// shift all regions to make them start at byte 0
 	if(orig_region_count > 0) {
 		int orig_regions_offset = orig_regions[0].start_byte;
@@ -8211,6 +8219,8 @@ abandon_entry:
   ck_free(eff_map);
 
   delete_kl_messages(kl_messages);
+
+	ck_free(orig_regions);
 
   ck_free(mutated_regions);
   mutated_regions = NULL;
