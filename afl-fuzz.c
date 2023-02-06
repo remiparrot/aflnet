@@ -6221,7 +6221,7 @@ int regions_remove_bytes(region_t* regions, unsigned int region_count, unsigned 
 /* Take the current entry from the queue, fuzz it for a while. This
    function is a tad too long... returns 0 if fuzzed successfully, 1 if
    skipped or bailed out. */
-static unsigned havoc_case = 0;
+//static unsigned havoc_case = 0;
 
 static u8 fuzz_one(char** argv) {
 
@@ -7457,12 +7457,12 @@ havoc_stage:
 
     stage_cur_val = use_stacking;
 
-    //for (i = 0; i < use_stacking; i++) {
-		havoc_case++;
-		if(havoc_case>15 + 2 + (region_level_mutation ? 4 : 0)) havoc_case=0;
+    for (i = 0; i < use_stacking; i++) {
+		//havoc_case++;
+		//if(havoc_case>15 + 2 + (region_level_mutation ? 4 : 0)) havoc_case=0;
 
-      switch (havoc_case) {
-      //switch (UR(15 + 2 + (region_level_mutation ? 4 : 0))) {
+      //switch (havoc_case) {
+      switch (UR(15 + 2 + (region_level_mutation ? 4 : 0))) {
 
         case 0:
 
@@ -7984,7 +7984,7 @@ havoc_stage:
 
       }
 
-    //}
+    }
 
     if (common_fuzz_stuff(argv, out_buf, temp_len))
       goto abandon_entry;
