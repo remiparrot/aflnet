@@ -2445,7 +2445,7 @@ static void read_testcases(void) {
 
   u8* suffix_replay = alloc_printf("replay");
   u8* suffix_length = alloc_printf("length");
-	u8* prefix = alloc_printf("seed-state");
+	//u8* prefix = alloc_printf("seed-state");
 
   for (i = 0; i < nl_cnt; i++) {
 
@@ -2453,17 +2453,17 @@ static void read_testcases(void) {
 
 			/* Get state ID from filename and create the state */
 			/* A seed filename has the shape "seed-stateXX.replay"
-				 where XX is the ID of the state (1 or 2 digit) */
-			u32 state_id_length = 0;
-			while(nl[i]->d_name[state_id_length + 10] != '.') {
-				state_id_length++;
-			}
-			//(strlen(nl[i]->d_name) - strlen(suffix_replay)) - strlen(prefix) - 1;
-			u8* state_id_str = ck_alloc((state_id_length+1)*sizeof(u8));
-			memcpy(state_id_str, &nl[i]->d_name[strlen(prefix)], state_id_length);
-			state_id_str[state_id_length]='\0';
-			target_state_id = atoi(state_id_str);
-			ck_free(state_id_str);
+				 where XX is the ID of the state (n digit) */
+			//u32 state_id_length = 0;
+			//while(nl[i]->d_name[state_id_length + 10] != '.') {
+			//	state_id_length++;
+			//}
+			////(strlen(nl[i]->d_name) - strlen(suffix_replay)) - strlen(prefix) - 1;
+			//u8* state_id_str = ck_alloc((state_id_length+1)*sizeof(u8));
+			//memcpy(state_id_str, &nl[i]->d_name[strlen(prefix)], state_id_length);
+			//state_id_str[state_id_length]='\0';
+			//target_state_id = atoi(state_id_str);
+			//ck_free(state_id_str);
 
 			struct stat st;
 
@@ -2513,13 +2513,15 @@ static void read_testcases(void) {
 			ck_free(cp_fname);
 
 			add_to_queue(fn, st.st_size, passed_det);
+
+			target_state_id++;
 		}
 
   }
 
 	ck_free(suffix_replay);
 	ck_free(suffix_length);
-	ck_free(prefix);
+	//ck_free(prefix);
 
   /* AFLNet: unset this flag to disable request extractions while adding new seed to the queue */
   corpus_read_or_sync = 0;
