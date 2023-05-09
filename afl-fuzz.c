@@ -420,7 +420,7 @@ region_t* (*extract_requests)(unsigned char* buf, unsigned int buf_size, unsigne
 //static unsigned int global_region_count = 0;
 //static region_t* global_regions = NULL;
 
-#define DEBUG_REGIONS
+//#define DEBUG_REGIONS
 
 /* Initialize the implemented state machine as a graphviz graph */
 void setup_ipsm()
@@ -2240,11 +2240,9 @@ static void cull_queue(void) {
       top_rated[i]->favored = 1;
       queued_favored++;
 
-			//printf("ici\n");
       //if (!top_rated[i]->was_fuzzed) pending_favored++;
       /* AFLNet takes into account more information to make this decision */
       if ((top_rated[i]->generating_state_id == target_state_id || top_rated[i]->is_initial_seed) && (was_fuzzed_map[get_state_index(target_state_id)][top_rated[i]->index] == 0)) pending_favored++;
-			//printf("là\n");
 
     }
 
@@ -3552,7 +3550,26 @@ static u8 run_target(char** argv, u32 timeout) {
 
 static void write_to_testcase(void* mem, u32 len) {
 
-  //AFLNet sends data via network so it does not need this function
+  s32 fd = out_fd;
+
+  if (out_file) {
+
+    unlink(out_file); /* Ignore errors. */
+
+    fd = open(out_file, O_WRONLY | O_CREAT | O_EXCL, 0600);
+
+    if (fd < 0) PFATAL("Unable to create '%s'", out_file);
+
+  } else lseek(fd, 0, SEEK_SET);
+
+  ck_write(fd, mem, len, out_file);
+
+  if (!out_file) {
+
+    if (ftruncate(fd, len)) PFATAL("ftruncate() failed");
+    lseek(fd, 0, SEEK_SET);
+
+  } else close(fd);
 
 }
 
@@ -5529,8 +5546,6 @@ static void show_stats(void) {
    along with several hardcoded constants. Maybe clean up eventually. */
 
 static void show_init_stats(void) {
-
-	//printf("show_init_stats\n");
 
   struct queue_entry* q = queue;
   u32 min_bits = 0, max_bits = 0;
