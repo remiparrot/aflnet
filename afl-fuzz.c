@@ -1035,9 +1035,6 @@ void create_new_state(struct queue_entry *q) {
   
 	was_fuzzed_map[get_state_index(q->generating_state_id)][q->index] = 0; //Mark it as reachable but not fuzzed
 
-	//printf("new state: {\n");
-	//printf("\tid=%u\n",newState->id);
-	//printf("}\n");
 }
 
 /* Send (mutated) messages in order to the server under test */
@@ -2227,7 +2224,6 @@ static void cull_queue(void) {
 
   for (i = 0; i < MAP_SIZE; i++)
     if (top_rated[i] && (temp_v[i >> 3] & (1 << (i & 7)))) {
-			//printf("top_rated[i]->generating_state_id=%u\n", top_rated[i]->generating_state_id);
 
       u32 j = MAP_SIZE >> 3;
 
@@ -9906,7 +9902,6 @@ int main(int argc, char** argv) {
           }
         }
       }
-			//printf("target_state_id=%u\n", target_state_id);
 
       skipped_fuzz = fuzz_one(use_argv);
 
