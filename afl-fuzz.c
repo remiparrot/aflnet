@@ -633,7 +633,7 @@ u32 update_scores_and_select_next_state(u8 mode) {
       switch(mode) {
         case FAVOR:
           //state->score = ceil(1000 * pow(2, -log10(log10(state->fuzzs + 1) * state->selected_times + 1)) * pow(2, log(state->paths_discovered + 1)));
-          state->score = ceil(1000 * pow(2, -log10(state->selected_times + 1)));
+          state->score = ceil(1000 * pow(2, -log10(state->selected_times + 1)) * pow(2, log10(state->seeds_count + 1)));
           break;
         //other cases are reserved
       }
@@ -670,7 +670,7 @@ unsigned int choose_target_state(u8 mode) {
       break;
     case FAVOR:
       /* Do ROUND_ROBIN for a few cycles to get enough statistical information*/
-      if (state_cycles < 5) {
+      if (state_cycles < 2) {
         result = state_ids[selected_state_index];
         selected_state_index++;
         if (selected_state_index == state_ids_count) {
@@ -713,7 +713,7 @@ struct queue_entry *choose_seed(u32 target_state_id, u8 mode)
         if (state->selected_seed_index == state->seeds_count) state->selected_seed_index = 0;
         break;
       case FAVOR:
-        if (state->seeds_count > 10) {
+        if (state->seeds_count > 5) {
           //Do seed selection similar to AFL + take into account state-aware information
           //e.g., was_fuzzed information becomes state-aware
           u32 passed_cycles = 0;
@@ -2159,10 +2159,12 @@ static void update_bitmap_score(struct queue_entry* q) {
          /* AFLNet check unique state count first */
 
          //if (q->unique_state_count < top_rated[i]->unique_state_count) continue;
+         //if (q->M2_start_region_ID < top_rated[i]->M2_start_region_ID) continue;
 
          /* Faster-executing or smaller test cases are favored. */
 
          //if ((q->unique_state_count < top_rated[i]->unique_state_count) && (fav_factor > top_rated[i]->exec_us * top_rated[i]->len)) continue;
+         //if ((q->M2_start_region_ID < top_rated[i]->M2_start_region_ID) && (fav_factor > top_rated[i]->exec_us * top_rated[i]->len)) continue;
          if (fav_factor > top_rated[i]->exec_us * top_rated[i]->len) continue;
 
          /* Looks like we're going to win. Decrease ref count for the
@@ -5510,7 +5512,8 @@ static void show_stats(void) {
   if (getenv("AFLNET_DEBUG") && (atoi(getenv("AFLNET_DEBUG")) == 1) && state_aware_mode) {
     SAYF(cRST "\n\nMax_seed_region_count: %-4s, current_kl_messages_size: %-4s\n\n", DI(max_seed_region_count), DI(kl_messages->size));
     SAYF(cRST "target_state_id: %-4s, M2_start_region_ID: %-4s\n\n", DI(target_state_id), DI(M2_start_region_ID));
-    SAYF(cRST "State IDs and its #selected_times,"cCYA  "#fuzzs,"cLRD "#discovered_paths,"cGRA "#excersing_paths:\n");
+		//SAYF(cRST "State IDs and its #selected_times,"cCYA  "#fuzzs,"cLRD "#discovered_paths,"cGRA "#excersing_paths:\n");
+    SAYF(cRST "State IDs and its #selected_times,"cCYA  "#seeds_count:\n");
 
     khint_t k;
     state_info_t *state;
@@ -5522,7 +5525,8 @@ static void show_stats(void) {
       k = kh_get(hms, khms_states, state_id);
       if (k != kh_end(khms_states)) {
         state = kh_val(khms_states, k);
-        SAYF(cRST "S%-3s:%-4s,"cCYA "%-5s,"cLRD "%-5s,"cGRA "%-5s",  DI(state->id), DI(state->selected_times), DI(state->fuzzs), DI(state->paths_discovered), DI(state->paths));
+				//SAYF(cRST "S%-3s:%-4s,"cCYA "%-5s,"cLRD "%-5s,"cGRA "%-5s",  DI(state->id), DI(state->selected_times), DI(state->fuzzs), DI(state->paths_discovered), DI(state->paths));
+        SAYF(cRST "S%-3s:%-4s,"cCYA "%-5s", DI(state->id), DI(state->selected_times), DI(state->seeds_count));
         if ((i + 1) % 3 == 0) SAYF("\n");
       }
     }
