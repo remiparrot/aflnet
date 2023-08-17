@@ -4606,6 +4606,35 @@ static void write_stats_file(double bitmap_cvg, double stability, double eps) {
 
   fclose(f);
 
+	/* states stats */
+  if (state_aware_mode) {
+		u8* fn_states = alloc_printf("%s/states_stats", out_dir);
+		s32 fd_states;
+		FILE* f_states;
+
+		fd_states = open(fn_states, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+
+		if (fd_states < 0) PFATAL("Unable to create '%s'", fn_states);
+
+		ck_free(fn_states);
+
+		f_states = fdopen(fd_states, "w");
+
+		if (!f_states) PFATAL("fdopen() failed");
+
+		fprintf(f_states, "State IDs and its #selected_times, #seeds_count:\n");
+		for(u32 i = 0; i < state_ids_count; i++) {
+			u32 state_id = state_ids[i];
+			khint_t k = kh_get(hms, khms_states, state_id);
+			if (k != kh_end(khms_states)) {
+				state_info_t *state = kh_val(khms_states, k);
+				fprintf(f_states, "S%-3s : %u, %u\n", DI(state->id), state->selected_times, state->seeds_count);
+			}
+		}
+
+		fclose(f_states);
+	}
+
 }
 
 
@@ -5527,7 +5556,7 @@ static void show_stats(void) {
         state = kh_val(khms_states, k);
 				//SAYF(cRST "S%-3s:%-4s,"cCYA "%-5s,"cLRD "%-5s,"cGRA "%-5s",  DI(state->id), DI(state->selected_times), DI(state->fuzzs), DI(state->paths_discovered), DI(state->paths));
         SAYF(cRST "S%-3s:%-4s,"cCYA "%-5s", DI(state->id), DI(state->selected_times), DI(state->seeds_count));
-        if ((i + 1) % 3 == 0) SAYF("\n");
+        if ((i + 1) % 5 == 0) SAYF("\n");
       }
     }
 		SAYF("\n");
