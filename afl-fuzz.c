@@ -733,7 +733,8 @@ struct queue_entry *choose_seed(u32 target_state_id, u8 mode)
               /* If we have any favored, non-fuzzed new arrivals in the queue,
                  possibly skip to them at the expense of already-fuzzed or non-favored
                  cases. */
-              if (((was_fuzzed_map[target_state_index][result->index] == 1) || !result->favored) && UR(100) < SKIP_TO_NEW_PROB) continue;
+              //if (((was_fuzzed_map[target_state_index][result->index] == 1) || !result->favored) && UR(100) < SKIP_TO_NEW_PROB) continue;
+              if ((result->was_fuzzed || !result->favored) && UR(100) < SKIP_TO_NEW_PROB) continue;
 
               /* Otherwise, this seed is selected */
               break;
@@ -741,7 +742,8 @@ struct queue_entry *choose_seed(u32 target_state_id, u8 mode)
               /* Otherwise, still possibly skip non-favored cases, albeit less often.
                  The odds of skipping stuff are higher for already-fuzzed inputs and
                  lower for never-fuzzed entries. */
-              if (queue_cycle > 1 && (was_fuzzed_map[target_state_index][result->index] == 0)) {
+              //if (queue_cycle > 1 && (was_fuzzed_map[target_state_index][result->index] == 0)) {
+              if (queue_cycle > 1 && !result->was_fuzzed) {
                 if (UR(100) < SKIP_NFAV_NEW_PROB) continue;
               } else {
                 if (UR(100) < SKIP_NFAV_OLD_PROB) continue;
@@ -1699,12 +1701,12 @@ static void add_to_queue(u8* fname, u32 len, u8 passed_det) {
   last_path_time = get_cur_time();
 
   //Add a new column to the was_fuzzed map
-  if (fuzzed_map_states) {
+  //if (fuzzed_map_states) {
     expand_was_fuzzed_map(0, 1);
-  } else {
-    //Also add a new row (for state 0) if needed
-    expand_was_fuzzed_map(1, 1);
-  }
+  //} else {
+  //  //Also add a new row (for state 0) if needed
+  //  expand_was_fuzzed_map(1, 1);
+  //}
 }
 
 
@@ -2236,9 +2238,14 @@ static void cull_queue(void) {
       top_rated[i]->favored = 1;
       queued_favored++;
 
-      //if (!top_rated[i]->was_fuzzed) pending_favored++;
-      /* AFLNet takes into account more information to make this decision */
-      if ((top_rated[i]->generating_state_id == target_state_id || top_rated[i]->is_initial_seed) && (was_fuzzed_map[get_state_index(target_state_id)][top_rated[i]->index] == 0)) pending_favored++;
+      if (state_aware_mode){
+	      /* AFLNet takes into account more information to make this decision */
+	      if ((top_rated[i]->generating_state_id == target_state_id) && (!top_rated[i]->was_fuzzed)) pending_favored++;
+	      //if ((top_rated[i]->generating_state_id == target_state_id || top_rated[i]->is_initial_seed) && (was_fuzzed_map[get_state_index(target_state_id)][top_rated[i]->index] == 0)) pending_favored++;
+      }
+      else {
+	      if (!top_rated[i]->was_fuzzed) pending_favored++;
+      }
 
     }
 
@@ -2512,6 +2519,7 @@ static void read_testcases(void) {
 		}
 
   }
+	target_state_id = 0;
 
 	ck_free(suffix_replay);
 	ck_free(suffix_length);
@@ -8219,9 +8227,12 @@ abandon_entry:
 
   if (!stop_soon && !queue_cur->cal_failed && !queue_cur->was_fuzzed) {
     queue_cur->was_fuzzed = 1;
-    was_fuzzed_map[get_state_index(target_state_id)][queue_cur->index] = 1;
+    if(state_aware_mode) was_fuzzed_map[get_state_index(target_state_id)][queue_cur->index] = 1;
     pending_not_fuzzed--;
-    if (queue_cur->favored) pending_favored--;
+    if (!state_aware_mode && queue_cur->favored)
+    {
+	    pending_favored--;
+    }
   }
 
   //munmap(orig_in, queue_cur->len);
