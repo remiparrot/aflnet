@@ -4608,31 +4608,32 @@ static void write_stats_file(double bitmap_cvg, double stability, double eps) {
 
 	/* states stats */
   if (state_aware_mode) {
-		u8* fn_states = alloc_printf("%s/states_stats", out_dir);
-		s32 fd_states;
-		FILE* f_states;
+	u8* fn_states = alloc_printf("%s/states_stats", out_dir);
+	s32 fd_states;
+	FILE* f_states;
 
-		fd_states = open(fn_states, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+	fd_states = open(fn_states, O_WRONLY | O_CREAT | O_TRUNC, 0600);
 
-		if (fd_states < 0) PFATAL("Unable to create '%s'", fn_states);
+	if (fd_states < 0) PFATAL("Unable to create '%s'", fn_states);
 
-		ck_free(fn_states);
+	ck_free(fn_states);
 
-		f_states = fdopen(fd_states, "w");
+	f_states = fdopen(fd_states, "w");
 
-		if (!f_states) PFATAL("fdopen() failed");
+	if (!f_states) PFATAL("fdopen() failed");
 
-		fprintf(f_states, "State IDs and its #selected_times, #seeds_count:\n");
-		for(u32 i = 0; i < state_ids_count; i++) {
-			u32 state_id = state_ids[i];
-			khint_t k = kh_get(hms, khms_states, state_id);
-			if (k != kh_end(khms_states)) {
-				state_info_t *state = kh_val(khms_states, k);
-				fprintf(f_states, "S%-3s : %u, %u\n", DI(state->id), state->selected_times, state->seeds_count);
-			}
+	fprintf(f_states, "State ID: initial_seed_fname, #selected_times, #seeds_count\n");
+	for(u32 i = 0; i < state_ids_count; i++) {
+		u32 state_id = state_ids[i];
+		khint_t k = kh_get(hms, khms_states, state_id);
+		if (k != kh_end(khms_states)) {
+			state_info_t *state = kh_val(khms_states, k);
+			struct queue_entry *q = state->seeds[0];
+			fprintf(f_states, "S%-3s : %s, %u, %u\n", DI(state->id), q->fname, state->selected_times, state->seeds_count);
 		}
+	}
 
-		fclose(f_states);
+	fclose(f_states);
 	}
 
 }
