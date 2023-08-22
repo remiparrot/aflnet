@@ -6352,12 +6352,15 @@ AFLNET_REGIONS_SELECTION:;
   state aware dependent. However, once the information is clear, the code for fuzzing preparation is the same */
 
   if (state_aware_mode) {
+    /* M2 start point is defined in the queue struct */
+    M2_start_region_ID = queue_cur->M2_start_region_ID;
+    /* M2 size is selected randomly */
+    u32 total_region = queue_cur->region_count;
 
-		/* M2 start point is defined in the queue struct */
-		M2_start_region_ID = queue_cur->M2_start_region_ID;
-		/* M2 size is selected randomly */
-		u32 total_region = queue_cur->region_count;
-		M2_region_count = UR(total_region - M2_start_region_ID);
+    //Handle corner case(s) and skip the current queue entry
+    if (M2_start_region_ID >= total_region) return 1;
+
+    M2_region_count = UR(total_region - M2_start_region_ID);
 
     ///* In state aware mode, select M2 based on the targeted state ID */
     //u32 total_region = queue_cur->region_count;
@@ -6397,9 +6400,6 @@ AFLNET_REGIONS_SELECTION:;
     //    if (queue_cur->regions[i].state_count != queue_cur->regions[M2_start_region_ID].state_count) break;
     //    M2_region_count++;
     //  }
-
-      //Handle corner case(s) and skip the current queue entry
-      if (M2_start_region_ID >= queue_cur->region_count) return 1;
     //}
   } else {
     /* Select M2 randomly */
