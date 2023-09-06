@@ -623,6 +623,7 @@ u32 update_scores_and_select_next_state(u8 mode) {
 
   khint_t k;
   state_info_t *state;
+  struct queue_entry *first_seed;
   //Update the states' score
   for(i = 0; i < state_ids_count; i++) {
     u32 state_id = state_ids[i];
@@ -632,8 +633,10 @@ u32 update_scores_and_select_next_state(u8 mode) {
       state = kh_val(khms_states, k);
       switch(mode) {
         case FAVOR:
+          first_seed = (struct queue_entry *)(state->seeds[0]);
           //state->score = ceil(1000 * pow(2, -log10(log10(state->fuzzs + 1) * state->selected_times + 1)) * pow(2, log(state->paths_discovered + 1)));
-          state->score = ceil(1000 * pow(2, -log10(state->selected_times + 1)) * pow(2, log10(state->seeds_count + 1)));
+          state->score = ceil(1000 * pow(2, -log10(state->selected_times + 1)) * pow(2, (first_seed->M2_start_region_ID + 1) * log10(state->seeds_count + 1)));
+          //state->score = ceil(1000 * pow(2, (-log10(state->selected_times + 1)) * log10(state->seeds_count + 1)));
           break;
         //other cases are reserved
       }
