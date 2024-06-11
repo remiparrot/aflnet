@@ -1541,6 +1541,7 @@ u32 get_M2_start_region_ID(u8* fname)
 	char buff[256];
 	fgets(buff, 256, fstart_region);
   u32 M2_start_region_ID = atoi(buff);
+  fclose(fstart_region);
 
   return M2_start_region_ID;
 }
